@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'unsafe-inline'; script-src 'self'; base-uri 'none'; form-action 'none'">
+<title>Sayfa açılamadı</title>
+<style>
+  :root { --zemin:#f6f7f9; --kart:#fff; --metin:#1c1f26; --metin2:#6b7280; --cizgi:#e2e5ea; --vurgu:#c62d42; }
+  @media (prefers-color-scheme: dark) {
+    :root { --zemin:#16181d; --kart:#23262e; --metin:#e8eaee; --metin2:#9aa2b1; --cizgi:#333844; --vurgu:#ff6b80; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center; padding:40px 20px;
+    background:var(--zemin); color:var(--metin);
+    font:14px/1.6 "Segoe UI", system-ui, -apple-system, sans-serif;
+  }
+  main { width:min(520px,100%); }
+  .isaret { width:44px; height:44px; color:var(--vurgu); margin-bottom:18px; }
+  h1 { margin:0 0 10px; font-size:22px; font-weight:600; letter-spacing:-.01em; }
+  p { margin:0 0 14px; color:var(--metin2); }
+  .adres {
+    display:block; padding:10px 14px; margin-bottom:18px;
+    border:1px solid var(--cizgi); border-radius:9px; background:var(--kart);
+    font-size:12.5px; color:var(--metin2); word-break:break-all;
+  }
+  ul { margin:0 0 20px; padding-left:20px; color:var(--metin2); font-size:13px; }
+  li { margin-bottom:4px; }
+  button {
+    padding:9px 18px; border:1px solid var(--vurgu); border-radius:9px;
+    background:var(--vurgu); color:#fff; font:inherit; font-size:13px; cursor:pointer;
+  }
+  button:hover { filter:brightness(1.08); }
+  .kod { margin-top:18px; font-size:11.5px; color:var(--metin2); font-family:ui-monospace, Consolas, monospace; }
+</style>
+</head>
+<body>
+  <main>
+    <svg class="isaret" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="9"/><path d="M12 7.5v5M12 16.2v.2"/>
+    </svg>
+    <h1 id="baslik">Bu sayfa açılamadı</h1>
+    <p id="aciklama"></p>
+    <code class="adres" id="adres"></code>
+    <ul id="oneriler"></ul>
+    <button id="tekrar" type="button">Tekrar dene</button>
+    <div class="kod" id="kod"></div>
+  </main>
+  <script src="error.js"></script>
+</body>
+</html>

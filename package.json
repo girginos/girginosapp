@@ -1,0 +1,79 @@
+{
+  "name": "girginos-browser",
+  "productName": "Girginos Browser",
+  "version": "0.1.0",
+  "description": "Girginos Browser — gizlilik odaklı web tarayıcısı",
+  "main": "main.js",
+  "author": "Girginos",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "test": "node test/dogrula.js && node test/guvenlik.js && node test/guncelleme.js && node test/sozlesme.js",
+    "anahtar-uret": "node scripts/anahtar-uret.js",
+    "paket": "electron-builder",
+    "paket-dizin": "electron-builder --dir",
+    "manifest-imzala": "node scripts/manifest-imzala.js",
+    "yayin-dogrula": "node scripts/yayin-dogrula.js",
+    "canli-dogrula": "node scripts/canli-dogrula.js"
+  },
+  "devDependencies": {
+    "electron": "^44.2.0",
+    "electron-builder": "^26.15.3"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
+  },
+  "build": {
+    "appId": "app.girginos.browser",
+    "productName": "Girginos Browser",
+    "copyright": "Girginos",
+    "directories": {
+      "output": "dagitim",
+      "buildResources": "yapi-kaynaklari"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*",
+      "ui/**/*",
+      "package.json",
+      "!**/*.map"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "artifactName": "GirginosBrowser-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false
+    },
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.productivity",
+      "artifactName": "GirginosBrowser-${version}-${arch}.${ext}"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Network",
+      "artifactName": "GirginosBrowser-${version}-${arch}.${ext}"
+    },
+    "publish": [
+      {
+        "provider": "generic",
+        "url": "https://browserapp.girginos.app/pusula",
+        "channel": "latest"
+      }
+    ]
+  }
+}
