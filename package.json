@@ -45,7 +45,7 @@
       "target": [
         "nsis"
       ],
-      "artifactName": "GirginosBrowser-Setup-${version}.${ext}"
+      "artifactName": "girginos.${ext}"
     },
     "nsis": {
       "oneClick": false,
@@ -59,14 +59,14 @@
         "zip"
       ],
       "category": "public.app-category.productivity",
-      "artifactName": "GirginosBrowser-${version}-${arch}.${ext}"
+      "artifactName": "girginos-${arch}.${ext}"
     },
     "linux": {
       "target": [
         "AppImage"
       ],
       "category": "Network",
-      "artifactName": "GirginosBrowser-${version}-${arch}.${ext}"
+      "artifactName": "girginos-${arch}.${ext}"
     },
     "publish": [
       {
