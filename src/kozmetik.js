@@ -80,7 +80,21 @@ function kuralCoz(satir) {
   if (tip === '#?#' || tip === '#$#') return null;
 
   const secici = satir.slice(yer + tip.length).trim();
-  if (!secici || UZANTI_SOZDIZIMI.test(secici) || !seciciGuvenliMi(secici)) return null;
+  if (!secici) return null;
+
+  /*
+   * SCRIPTLET KURALLARI ("##+js(...)") REDDEDİLİYOR.
+   *
+   * uBO/AdGuard bunları JavaScript enjekte etmek için kullanıyor; biz scriptlet
+   * çalıştırmıyoruz. Ölçüldü: "+js(" seciciGuvenliMi'den geçiyordu (süslü
+   * parantez yok, parantez dengeli) ve UZANTI_SOZDIZIMI ":" öneki aradığı için
+   * yakalanmıyordu. Sonuç: geçersiz bir "+js(...){display:none!important}" CSS'i
+   * sayfaya sızıyor ve aynı 20'li demetteki MEŞRU seçicileri de düşürüyordu -
+   * annoyance listeleri eklenince binlerce kaçak. Bir seçici "+js(" ile başlıyor
+   * ya da "#%#"/"#$#" scriptlet imi taşıyorsa kural CSS'e çevrilemez.
+   */
+  if (secici.startsWith('+js(') || satir.includes('#%#') || satir.includes('#$#')) return null;
+  if (UZANTI_SOZDIZIMI.test(secici) || !seciciGuvenliMi(secici)) return null;
 
   /*
    * Ayraçtan önceki kısım bir alan adı listesi olmalı. Hosts dosyalarındaki

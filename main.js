@@ -5,9 +5,11 @@ const {
   dialog, Menu, clipboard, nativeTheme, protocol
 } = require('electron');
 const path = require('node:path');
+const fs = require('node:fs');
 const { pathToFileURL } = require('node:url');
 
 const { Store } = require('./src/store');
+const { preloadKaynagi } = require('./src/anti-adblock');
 const { Blocker, kokAlanAdi, hostAl } = require('./src/blocker');
 const { ListeYoneticisi } = require('./src/listeler');
 const { dilCoz, ceviri, bicimle, dilListesi } = require('./src/diller');
@@ -1349,6 +1351,39 @@ function webrtcPolitikasi() {
 }
 
 /*
+ * Anti-adblock karşı-önlemini oturuma bağlar.
+ *
+ * Preload metni çalışma anında diske yazılıyor (kaynağı src/anti-adblock.js;
+ * sandbox preload yerel modül require edemediği için gömülü). setPreloads
+ * OTURUM kapsamlı ve mevcut preload'ların üzerine yazar, o yüzden var olanları
+ * koruyarak ekliyoruz.
+ *
+ * Yazma başarısız olursa (disk) karşı-önlem sessizce devre dışı kalırdı; hata
+ * loglanıyor ve uygulama yine de açılıyor - karşı-önlem kritik değil.
+ */
+const ANTI_ADBLOCK_ID = 'anti-adblock';
+
+function antiAdblockKur() {
+  try {
+    const yol = path.join(app.getPath('userData'), 'anti-adblock-preload.js');
+    fs.writeFileSync(yol, preloadKaynagi(), 'utf8');
+    // registerPreloadScript, setPreloads'ın halefi (setPreloads Electron 44'te
+    // deprecated). Aynı id iki kez kaydedilirse hata verir; oturumKur bir kez
+    // çağrılıyor ama yine de kontrol ediyoruz.
+    if (typeof ses.registerPreloadScript === 'function') {
+      const kayitli = (ses.getPreloadScripts ? ses.getPreloadScripts() : [])
+        .some((p) => p.id === ANTI_ADBLOCK_ID);
+      if (!kayitli) ses.registerPreloadScript({ type: 'frame', id: ANTI_ADBLOCK_ID, filePath: yol });
+    } else {
+      const mevcut = ses.getPreloads ? ses.getPreloads() : [];
+      if (!mevcut.includes(yol)) ses.setPreloads([...mevcut, yol]);
+    }
+  } catch (e) {
+    console.error('Anti-adblock karşı-önlemi kurulamadı:', e.message);
+  }
+}
+
+/*
  * Chromium kuralimizi gercekten kabul etti mi?
  *
  * proxyRules bir URL degil, Chromium'un kendi mini dili; dizeye bakan hicbir
@@ -1408,6 +1443,8 @@ async function vekiliUygula() {
 
 async function oturumKur() {
   ses = session.fromPartition(OTURUM);
+
+  antiAdblockKur();
 
   /*
    * Sertifikayı yalnızca İZLİYORUZ: -3 "Chromium'un kendi doğrulama sonucunu
@@ -2087,6 +2124,16 @@ function ipcKur() {
     if (p.anahtar === 'filtreListeleriAcik' && listeler) listeler.tazele();
     if (p.anahtar === 'tema') temayiUygula();
     if (p.anahtar.startsWith('vekil')) vekiliUygula();
+    /*
+     * Genel engelleyici toggle'ı sağ üstteki düğmeden geliyor. Aktif sekmeyi
+     * yeniliyoruz: kozmetikCssAl ve engellensinMi engelleyiciAcik'i yalnızca
+     * gezinme anında okuyor, yenileme olmadan açık sayfada değişiklik
+     * görünmezdi - kullanıcı "çalışmadı" sanardı.
+     */
+    if (p.anahtar === 'engelleyiciAcik') {
+      const s = aktifSekme();
+      if (s && !s.view.webContents.isDestroyed()) s.view.webContents.reload();
+    }
     if (p.anahtar === 'dil') {
       // Dil anında uygulanır: menü yeniden kurulur, arayüz yeni tabloyu alır.
       diliUygula();

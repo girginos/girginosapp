@@ -10,6 +10,7 @@ const el = {
   geri: $('btnGeri'), ileri: $('btnIleri'), yenile: $('btnYenile'), anasayfa: $('btnAnasayfa'),
   adresKutu: $('adresKutu'), adres: $('adres'), adresGoster: $('adresGoster'), kilit: $('kilit'),
   kalkan: $('btnKalkan'), engelSayi: $('engelSayi'), yerImi: $('btnYerImi'),
+  reklamEngel: $('btnReklamEngel'),
   gecmis: $('btnGecmis'), indirmeler: $('btnIndirmeler'),
   onbellek: $('btnOnbellek'), ayarlar: $('btnAyarlar'),
   yerImleriCubugu: $('yerImleriCubugu'),
@@ -258,6 +259,13 @@ function aracCiz() {
   el.kalkan.title = engelleyiciAcik
     ? cev('arac.kalkanAcik', { n: t ? t.engellenen : 0 })
     : cev('arac.kalkanKapali');
+
+  // Genel reklam engelleyici düğmesi: SİTE bazlı kalkandan farklı olarak
+  // store.ayarlar.engelleyiciAcik'ı yansıtır (tüm siteler).
+  const genelAcik = !!durum.ayarlar.engelleyiciAcik;
+  el.reklamEngel.classList.toggle('etkin', genelAcik);
+  el.reklamEngel.setAttribute('aria-pressed', genelAcik ? 'true' : 'false');
+  el.reklamEngel.title = cev(genelAcik ? 'arac.reklamEngelAcik' : 'arac.reklamEngelKapali');
 
   el.kilit.className = 'rozet';
   el.kilit.hidden = !(t && t.url);
@@ -705,6 +713,17 @@ el.onbellek.addEventListener('click', async () => {
     el.onbellek.disabled = false;
     el.onbellek.title = cev('arac.onbellek');
   }, 1600);
+});
+
+/*
+ * Genel reklam engelleyiciyi aç/kapat. Site bazlı kalkandan (siteEngelleyici)
+ * ayrı: bu, tüm siteler için geçerli olan store.ayarlar.engelleyiciAcik'ı
+ * çeviriyor. Yeni bir IPC yok - mevcut ayarDegistir kanalı kullanılıyor;
+ * main.js toggle sonrası aktif sekmeyi yeniliyor (ağ + kozmetik + karşı-önlem
+ * yeni değere göre uygulansın).
+ */
+el.reklamEngel.addEventListener('click', () => {
+  window.pusula.ayarDegistir('engelleyiciAcik', !durum.ayarlar.engelleyiciAcik);
 });
 
 el.gecmis.addEventListener('click', () => panelAc('gecmis'));

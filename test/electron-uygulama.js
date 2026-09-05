@@ -63,7 +63,10 @@ const SAYFA = `<!doctype html><meta charset="utf-8"><title>bütünleşme</title>
     const p = new URLSearchParams({
       normal: g('#normal'),
       reklam: g('.butunlesme-reklam'),
-      cerez: document.cookie
+      cerez: document.cookie,
+      // Anti-adblock karşı-önlemi ana dünyaya girdi mi? main.js'in
+      // registerPreloadScript kablolamasını gerçek uygulamada doğrular.
+      aa: window.__pusulaAA ? '1' : '0'
     });
     fetch('/rapor?' + p.toString());
   }, 2500);
@@ -328,6 +331,8 @@ function kapat(cocuk) {
     // kozmetigiUygula() main.js'te bagli mi?
     bak('kozmetik kural gercek uygulamada uygulandi', rapor.veri.reklam, 'none');
     bak('sayfa kendi cerezini yazdi', /oturum=DENEME-1/.test(rapor.veri.cerez || ''), true);
+    // main.js gerçekten anti-adblock preload'ını kaydetti ve ana dünyaya girdi.
+    bak('anti-adblock karşı-önlemi gerçek uygulamada yüklü', rapor.veri.aa, '1');
   }
 
   const cerceveRapor = await raporBekle('/rapor-cerceve', 8000);
