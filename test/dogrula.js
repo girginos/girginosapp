@@ -371,6 +371,83 @@ esit('her kayıt geçerli alan adı biçiminde', LISTE.filter(d => !ALAN_BICIMI.
     Object.hasOwn(ipucuBasliklari(OLCULEN, false, ''), 'Sec-CH-UA-Platform'), false);
 }
 
+/* ---- akıllı çerez sistemi ---- */
+{
+  const {
+    ucuncuTarafMi, cerezTasinsinMi, silinecekCerezler, cerezSilmeUrl
+  } = require('../src/cerezler');
+  const { basligiSil } = require('../src/blocker');
+
+  esit('farklı kök üçüncü taraf', ucuncuTarafMi('izleyici.com', 'haber.com'), true);
+  esit('aynı kök birinci taraf', ucuncuTarafMi('haber.com', 'haber.com'), false);
+  // Üst alan bilinmiyorsa dokunmuyoruz: emin olmadan çerez kesmek oturum düşürür.
+  esit('üst alan yoksa üçüncü taraf sayılmaz', ucuncuTarafMi('izleyici.com', ''), false);
+
+  const ayar = (ek) => ({ istekKoku: 'izleyici.com', ustKok: 'haber.com', engelleAcik: true, istisna: false, ...ek });
+  esit('üçüncü taraf çerez taşınmaz', cerezTasinsinMi(ayar({})), false);
+  esit('ayar kapalıyken taşınır', cerezTasinsinMi(ayar({ engelleAcik: false })), true);
+  esit('istisna verilmişse taşınır', cerezTasinsinMi(ayar({ istisna: true })), true);
+  esit('birinci taraf her zaman taşınır', cerezTasinsinMi(ayar({ istekKoku: 'haber.com' })), true);
+
+  // Başlık adı büyük/küçük harf duyarsız; tek yazımı silmek sessiz başarısızlık olurdu.
+  const b1 = { cookie: 'a=1', Accept: '*/*' };
+  esit('küçük harfli başlık silinir', basligiSil(b1, 'Cookie'), true);
+  esit('silinince kalmaz', Object.hasOwn(b1, 'cookie'), false);
+  esit('başka başlığa dokunulmaz', b1.Accept, '*/*');
+  esit('yoksa false döner', basligiSil({ Accept: '*/*' }, 'Cookie'), false);
+
+  // Blocker üzerinden: isteğin tarafları details'ten doğru çıkarılıyor mu?
+  const sahteStore = {
+    ayarlar: { engelleyiciAcik: true, ucuncuTarafCerez: true },
+    cerezIstisnalari: [],
+    cerezIstisnasiMi(kok) { return this.cerezIstisnalari.includes(kok); }
+  };
+  const bl = new Blocker(sahteStore);
+  bl.ustAlanAyarla(7, 'https://haber.com/gundem');
+  const istek = (ek) => ({ url: 'https://izleyici.com/px', resourceType: 'image', webContentsId: 7, ...ek });
+
+  esit('üçüncü taraf istekte çerez kesilir', bl.cerezTasinirMi(istek({})), false);
+  esit('birinci taraf istekte kesilmez',
+    bl.cerezTasinirMi(istek({ url: 'https://cdn.haber.com/a.js' })), true);
+  /*
+   * ÜST SEVİYE GEZİNME: ustAlan haritası hâlâ ESKİ sayfayı gösterirken yeni
+   * siteye gidiliyor. Burada çerez kesilseydi, adres çubuğundan girilen her
+   * sitede oturum kapalı görünürdü.
+   */
+  esit('üst seviye gezinme muaf',
+    bl.cerezTasinirMi(istek({ resourceType: 'mainFrame' })), true);
+  // Alt çerçeve üçüncü taraftır; çerez asıl burada kesilmeli.
+  esit('alt çerçevede kesilir',
+    bl.cerezTasinirMi(istek({ resourceType: 'subFrame' })), false);
+
+  sahteStore.cerezIstisnalari.push('haber.com');
+  esit('site istisnası Blocker’a da işler', bl.cerezTasinirMi(istek({})), true);
+  sahteStore.cerezIstisnalari.length = 0;
+
+  // Sekmeye bağlanamayan istek: üst alan bilinmiyor, dokunmuyoruz.
+  esit('sekmesiz istekte kesilmez',
+    bl.cerezTasinirMi(istek({ webContentsId: undefined })), true);
+
+  /* kapanışta silme */
+  const cerezler = [
+    { domain: '.banka.com', name: 'oturum', path: '/', secure: true },
+    { domain: 'hesap.banka.com', name: 'x', path: '/', secure: true },
+    { domain: 'izleyici.com', name: 'kimlik', path: '/', secure: false }
+  ];
+  const kalan = silinecekCerezler(cerezler, new Set(['banka.com']), kokAlanAdi);
+  esit('korunan kökten hiçbiri silinmez', kalan.length, 1);
+  esit('silinen doğru çerez', kalan[0].name, 'kimlik');
+  esit('alan adı yoksa atlanır',
+    silinecekCerezler([{ domain: '', name: 'y' }], new Set(), kokAlanAdi).length, 0);
+
+  // Şema çerezin secure bayrağıyla uyuşmazsa Electron silmeyi sessizce atlar.
+  esit('secure çerez https ile silinir',
+    cerezSilmeUrl({ domain: '.banka.com', path: '/', secure: true }), 'https://banka.com/');
+  esit('secure olmayan http ile',
+    cerezSilmeUrl({ domain: 'izleyici.com', path: '/px', secure: false }), 'http://izleyici.com/px');
+  esit('alan adsız çerez için url yok', cerezSilmeUrl({ domain: '' }), null);
+}
+
 if (hatalar.length) {
   console.error('\nBAŞARISIZ (' + hatalar.length + '):\n');
   for (const h of hatalar) console.error('  ✗ ' + h + '\n');

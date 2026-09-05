@@ -1239,6 +1239,10 @@ function ayarlarPaneli() {
     anahtar(a.engelleyiciAcik, (v) => window.pusula.ayarDegistir('engelleyiciAcik', v))));
   g.appendChild(ayarSatiri(cev('ayar.dnt'), cev('ayar.dntAciklama'),
     anahtar(a.dntGonder, (v) => window.pusula.ayarDegistir('dntGonder', v))));
+  g.appendChild(ayarSatiri(cev('ayar.ucuncuTarafCerez'), cev('ayar.ucuncuTarafCerezAciklama'),
+    anahtar(a.ucuncuTarafCerez !== false, (v) => window.pusula.ayarDegistir('ucuncuTarafCerez', v))));
+  g.appendChild(ayarSatiri(cev('ayar.kapanistaCerezSil'), cev('ayar.kapanistaCerezSilAciklama'),
+    anahtar(!!a.kapanistaCerezSil, (v) => window.pusula.ayarDegistir('kapanistaCerezSil', v))));
   g.appendChild(ayarSatiri(cev('ayar.gecmisiKaydet'), cev('ayar.gecmisiKaydetAciklama'),
     anahtar(a.gecmisiKaydet, (v) => window.pusula.ayarDegistir('gecmisiKaydet', v))));
 

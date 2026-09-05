@@ -23,6 +23,7 @@ const {
 } = require('./src/menu-yerlesim');
 const { SertifikaDeposu } = require('./src/sertifikalar');
 const { uaTemizle } = require('./src/kullanici-araci');
+const { silinecekCerezler, cerezSilmeUrl } = require('./src/cerezler');
 const { ipucuBasliklari } = require('./src/istemci-ipuclari');
 
 // Şema ayrıcalıkları uygulama hazır olmadan bildirilmeli.
@@ -826,6 +827,30 @@ function menuKonumu(genislik, konum) {
 /* Adres çubuğundaki site bilgisi menüsü                             */
 /* ---------------------------------------------------------------- */
 
+/*
+ * Kapanışta çerezleri sil (ayar kapalıysa hiç çağrılmaz).
+ *
+ * Silme takılırsa uygulama kapanamaz hale gelirdi; bu yüzden bir zaman sınırı
+ * var. Sınır aşılırsa kalan çerezler bir sonraki kapanışta silinir - çıkışı
+ * süresiz bekletmekten iyidir.
+ */
+const CEREZ_TEMIZLIK_SINIRI = 4000;
+let cikistaTemizlendi = false;
+
+async function kapanistaCerezleriSil() {
+  const is = (async () => {
+    const korunan = store.korunanCerezKokleri(kokAlanAdi);
+    const hepsi = await ses.cookies.get({});
+    const silinecek = silinecekCerezler(hepsi, korunan, kokAlanAdi);
+    await Promise.all(silinecek.map((c) => {
+      const adres = cerezSilmeUrl(c);
+      return adres ? ses.cookies.remove(adres, c.name).catch(() => {}) : null;
+    }));
+  })();
+  const sinir = new Promise((coz) => setTimeout(coz, CEREZ_TEMIZLIK_SINIRI));
+  await Promise.race([is.catch((e) => console.error('Çerezler silinemedi:', e.message)), sinir]);
+}
+
 async function siteVerisiSil(origin, host) {
   try {
     await ses.clearStorageData({ origin });
@@ -883,6 +908,22 @@ async function siteMenusuGoster(konum) {
       label: cev('site.cerezler'),
       submenu: [
         { label: cev('site.cerezSayisi', { n: cerezSayisi }), enabled: false },
+        { type: 'separator' },
+        {
+          // Bu sitede üçüncü taraf çerezlere izin ver. Anahtar sekmedeki
+          // sayfanın kökü, isteğin değil: "bu site çalışsın" kararı.
+          label: cev('site.ucuncuTarafCerez'),
+          type: 'checkbox',
+          checked: !!kok && store.cerezIstisnasiMi(kok),
+          enabled: !!kok && store.ayarlar.ucuncuTarafCerez !== false,
+          click: () => {
+            if (!kok) return;
+            store.cerezIstisnasiDegistir(kok);
+            const a = aktifSekme();
+            if (a && !a.view.webContents.isDestroyed()) a.view.webContents.reload();
+            durumGonder();
+          }
+        },
         { type: 'separator' },
         { label: cev('site.veriSil'), click: () => siteVerisiSil(u.origin, host) }
       ]
@@ -1405,6 +1446,8 @@ const AYAR_DOGRULAMA = {
   anasayfa: (v) => typeof v === 'string' && v.length <= 2048,
   engelleyiciAcik: (v) => typeof v === 'boolean',
   dntGonder: (v) => typeof v === 'boolean',
+  ucuncuTarafCerez: (v) => typeof v === 'boolean',
+  kapanistaCerezSil: (v) => typeof v === 'boolean',
   gecmisiKaydet: (v) => typeof v === 'boolean',
   yerImleriCubugu: (v) => typeof v === 'boolean',
   filtreListeleriAcik: (v) => typeof v === 'boolean',
@@ -1834,6 +1877,20 @@ if (!app.requestSingleInstanceLock()) {
 
   app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') app.quit();
+  });
+
+  /*
+   * Kapanışta çerez temizliği.
+   *
+   * will-quit SENKRON çalışır: orada başlatılan bir silme işlemi bitmeden
+   * uygulama kapanır ve hiçbir çerez silinmez - klasik sessiz başarısızlık.
+   * Bu yüzden çıkış bir kez erteleniyor.
+   */
+  app.on('before-quit', (olay) => {
+    if (cikistaTemizlendi || !store || !store.ayarlar.kapanistaCerezSil) return;
+    cikistaTemizlendi = true;
+    olay.preventDefault();
+    kapanistaCerezleriSil().finally(() => app.quit());
   });
 
   app.on('will-quit', () => {

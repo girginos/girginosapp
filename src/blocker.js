@@ -1,6 +1,7 @@
 'use strict';
 
 const { LISTE } = require('./blocklist');
+const { cerezTasinsinMi } = require('./cerezler');
 
 // "co.uk", "com.tr" gibi iki seviyeli son ekler; kayıtlanabilir alan adını
 // doğru bulmak için gerekli. Tam bir public-suffix listesi değil, yaygın olanlar.
@@ -33,6 +34,23 @@ function kokAlanAdi(host) {
 // eşleşmez ve engelleyici tek karakterle atlatılır.
 function hostAl(url) {
   try { return new URL(url).hostname.toLowerCase().replace(/\.+$/, ''); } catch { return ''; }
+}
+
+/*
+ * Başlık adları büyük/küçük harf duyarsız ve Electron aynı başlığı isteğe göre
+ * "Cookie" ya da "cookie" diye verebiliyor. Tek bir yazımı silmek, öbür yazım
+ * geldiğinde SESSİZCE hiçbir şey yapmamak olurdu.
+ */
+function basligiSil(basliklar, ad) {
+  const aranan = ad.toLowerCase();
+  let silindi = false;
+  for (const anahtar of Object.keys(basliklar)) {
+    if (anahtar.toLowerCase() === aranan) {
+      delete basliklar[anahtar];
+      silindi = true;
+    }
+  }
+  return silindi;
 }
 
 class Blocker {
@@ -100,6 +118,27 @@ class Blocker {
     this.ipucuSaglayici = saglayici;
   }
 
+  /*
+   * Bu istekte çerez taşınmalı mı? Karar mantığı src/cerezler.js'te; burada
+   * yalnızca isteğin tarafları çıkarılıyor.
+   *
+   * ÜST SEVİYE GEZİNMELER HER ZAMAN MUAF. ustAlan haritası gezinme BİTİNCE
+   * güncelleniyor; A sitesinden B sitesine giderken istek hâlâ A'nın altında
+   * görünür, yani "üçüncü taraf" sayılır. Orada çerezi kesmek, adres çubuğuna
+   * yazılarak girilen her siteye çıkış yapılmış gibi görünmesine yol açardı.
+   */
+  cerezTasinirMi(details) {
+    if (details.resourceType === 'mainFrame') return true;
+    const wcId = details.webContentsId;
+    const ustKok = wcId != null ? this.ustAlan.get(wcId) : undefined;
+    return cerezTasinsinMi({
+      istekKoku: kokAlanAdi(hostAl(details.url)),
+      ustKok,
+      engelleAcik: this.store.ayarlar.ucuncuTarafCerez !== false,
+      istisna: !!ustKok && this.store.cerezIstisnasiMi(ustKok)
+    });
+  }
+
   listeleriBagla(yonetici) {
     this.listeler = yonetici;
   }
@@ -130,7 +169,18 @@ class Blocker {
        */
       const ipuclari = this.ipucuSaglayici ? this.ipucuSaglayici() : null;
       if (ipuclari) Object.assign(headers, ipuclari);
+
+      if (!this.cerezTasinirMi(details)) basligiSil(headers, 'Cookie');
       callback({ requestHeaders: headers });
+    });
+
+    // Giden çerezi kesmek yetmez: üçüncü taraf yanıtla YENİ çerez yazabilir ve
+    // bir dahaki ziyarette aynı kimlikle karşımıza çıkar. Set-Cookie de düşer.
+    ses.webRequest.onHeadersReceived((details, callback) => {
+      if (this.cerezTasinirMi(details)) return callback({});
+      const headers = { ...details.responseHeaders };
+      if (!basligiSil(headers, 'Set-Cookie')) return callback({});
+      callback({ responseHeaders: headers });
     });
   }
 
@@ -148,4 +198,4 @@ class Blocker {
   }
 }
 
-module.exports = { Blocker, kokAlanAdi, hostAl, IKI_SEVIYELI };
+module.exports = { Blocker, kokAlanAdi, hostAl, basligiSil, IKI_SEVIYELI };

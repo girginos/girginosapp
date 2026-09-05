@@ -13,6 +13,13 @@ const DEFAULTS = {
     aramaMotoru: 'duckduckgo',
     engelleyiciAcik: true,
     dntGonder: true,
+    // Üçüncü taraf çerezleri siteler arası takibin ana taşıyıcısı; varsayılan
+    // olarak taşınmıyorlar. Bozulan bir site çıkarsa adres çubuğundaki site
+    // menüsünden o siteye özel istisna verilebilir.
+    ucuncuTarafCerez: true,
+    // Kapanışta çerezleri sil. Yer imlerindeki siteler korunur: onlar
+    // kullanıcının bilerek sakladığı, oturumunu kaybetmek istemediği siteler.
+    kapanistaCerezSil: false,
     gecmisiKaydet: true,
     anasayfa: '',
     yerImleriCubugu: true,
@@ -56,7 +63,8 @@ const DEFAULTS = {
   gecmis: [],        // { url, baslik, zaman }
   yerImleri: [],     // { url, baslik, zaman }
   izinler: {},       // origin -> { [permission]: 'izin' | 'ret' }
-  siteIzinleri: [],  // engelleyicinin devre dışı bırakıldığı alan adları
+  siteIzinleri: [],     // engelleyicinin devre dışı bırakıldığı alan adları
+  cerezIstisnalari: [], // üçüncü taraf çereze izin verilen üst seviye kökler
   istatistik: { engellenen: 0 }
 };
 
@@ -244,6 +252,41 @@ class Store {
     return i < 0;
   }
 
+  /*
+   * Üçüncü taraf çerez istisnası. Anahtar, isteğin değil SEKMEDEKİ sayfanın
+   * kökü: kullanıcı "şu sitede çerezler çalışsın" diyor, "şu izleyici her
+   * yerde çalışsın" demiyor.
+   */
+  cerezIstisnasiMi(kok) {
+    return this.veri.cerezIstisnalari.includes(kok);
+  }
+
+  cerezIstisnasiDegistir(kok) {
+    if (!kok) return false;
+    const i = this.veri.cerezIstisnalari.indexOf(kok);
+    if (i >= 0) this.veri.cerezIstisnalari.splice(i, 1);
+    else this.veri.cerezIstisnalari.push(kok);
+    this.kaydet();
+    return i < 0;
+  }
+
+  /*
+   * Kapanışta silinmeyecek kökler: yer imleri. Ayrı bir "korunan siteler"
+   * listesi tutmuyoruz; kullanıcının zaten bilerek işaretlediği siteler bu
+   * soruya yeterince iyi cevap veriyor ve doldurulmayı bekleyen boş bir liste
+   * bırakmıyor.
+   */
+  korunanCerezKokleri(kokBul) {
+    const kokler = new Set();
+    for (const y of this.veri.yerImleri) {
+      let host;
+      try { host = new URL(y.url).hostname; } catch { continue; }
+      const kok = kokBul(host);
+      if (kok) kokler.add(kok);
+    }
+    return kokler;
+  }
+
   izinKaydet(origin, izinAdi, karar) {
     if (!this.veri.izinler[origin]) this.veri.izinler[origin] = {};
     this.veri.izinler[origin][izinAdi] = karar;
@@ -301,6 +344,7 @@ class Store {
   izinleriTemizle() {
     this.veri.izinler = {};
     this.veri.siteIzinleri = [];
+    this.veri.cerezIstisnalari = [];
     this.hemenKaydet();
   }
 }
