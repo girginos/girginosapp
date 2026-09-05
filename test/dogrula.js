@@ -336,6 +336,41 @@ esit('her kayıt geçerli alan adı biçiminde', LISTE.filter(d => !ALAN_BICIMI.
    */
 }
 
+/* ---- Sec-CH-UA basliklari ---- */
+/*
+ * Beklenen degerler UYDURMA DEGIL: calisan Electron 44'te, https bir sayfada
+ * navigator.userAgentData'dan okundu. Baslik tam olarak onu yansitmali;
+ * ayrisirsa duzeltmeye calistigimiz tutarsizligi geri getiririz.
+ */
+{
+  const { ipucuBasliklari } = require('../src/istemci-ipuclari');
+
+  const OLCULEN = [
+    { brand: 'Not?A_Brand', version: '24' },
+    { brand: 'Chromium', version: '152' }
+  ];
+
+  const b = ipucuBasliklari(OLCULEN, false, 'Windows');
+  esit('Sec-CH-UA olculeni yansitir', b['Sec-CH-UA'], '"Not?A_Brand";v="24", "Chromium";v="152"');
+  esit('mobil degil', b['Sec-CH-UA-Mobile'], '?0');
+  esit('platform tirnakli', b['Sec-CH-UA-Platform'], '"Windows"');
+
+  esit('mobil bayragi', ipucuBasliklari(OLCULEN, true, 'Android')['Sec-CH-UA-Mobile'], '?1');
+
+  // Marka adinda tirnak/ters bolu olursa kacirilmali, yoksa baslik bozulur.
+  const kacis = ipucuBasliklari([{ brand: 'A"B\\C', version: '1' }], false, 'Windows');
+  esit('tirnak ve ters bolu kacirilir', kacis['Sec-CH-UA'], '"A\\"B\\\\C";v="1"');
+
+  // Uretilemeyen durumlarda null: eksik baslik, YANLIS baslıktan iyidir.
+  esit('marka yoksa null', ipucuBasliklari([], false, 'Windows'), null);
+  esit('dizi degilse null', ipucuBasliklari(null, false, 'Windows'), null);
+  esit('bos markalar null', ipucuBasliklari([{}], false, 'Windows'), null);
+
+  // Platform bilinmiyorsa o baslik hic eklenmez.
+  esit('platformsuz baslik yok',
+    Object.hasOwn(ipucuBasliklari(OLCULEN, false, ''), 'Sec-CH-UA-Platform'), false);
+}
+
 if (hatalar.length) {
   console.error('\nBAŞARISIZ (' + hatalar.length + '):\n');
   for (const h of hatalar) console.error('  ✗ ' + h + '\n');

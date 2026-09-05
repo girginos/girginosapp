@@ -23,6 +23,7 @@ const {
 } = require('./src/menu-yerlesim');
 const { SertifikaDeposu } = require('./src/sertifikalar');
 const { uaTemizle } = require('./src/kullanici-araci');
+const { ipucuBasliklari } = require('./src/istemci-ipuclari');
 
 // Şema ayrıcalıkları uygulama hazır olmadan bildirilmeli.
 protocol.registerSchemesAsPrivileged([{
@@ -1065,6 +1066,25 @@ let izinOnayAcik = false;
  * degistirmiyor ve ikisinin ayrismasi, tek etiketli bir baslıktan cok daha
  * guclu bir bot sinyali uretiyor.
  */
+/*
+ * Sec-CH-UA basliklari sayfanin kendi userAgentData degerlerinden uretiliyor.
+ * Degerleri arayuz penceresinden BIR KEZ okuyup onbellege aliyoruz: boylece
+ * tel uzerindeki bilgi ile JavaScript API'sinin soyledigi ayrisamaz.
+ * Okunamazsa baslik hic eklenmez - eksik baslik, yanlis basliktan iyidir.
+ */
+let istemciIpuclari = null;
+
+async function ipucuBasliklariniOku(wc) {
+  if (istemciIpuclari || !wc || wc.isDestroyed()) return;
+  try {
+    const d = await wc.executeJavaScript(
+      '(() => { const d = navigator.userAgentData;'
+      + ' return d ? { brands: d.brands, mobile: d.mobile, platform: d.platform } : null; })()'
+    );
+    if (d) istemciIpuclari = ipucuBasliklari(d.brands, d.mobile, d.platform);
+  } catch { /* okunamadi: baslik eklenmez */ }
+}
+
 function uaAyarla() {
   if (!ses) return;
   ses.setUserAgent(uaTemizle(ses.getUserAgent()));
@@ -1084,6 +1104,7 @@ function oturumKur() {
   });
 
   blocker = new Blocker(store);
+  blocker.ipuclariniBagla(() => istemciIpuclari);
   blocker.bagla(ses, durumGonder);
 
   // Liste indirmeleri ayrı ve kalıcı olmayan bir oturumdan çıkar: çerez
@@ -1354,6 +1375,7 @@ function pencereOlustur() {
   });
 
   win.webContents.on('did-finish-load', () => {
+    ipucuBasliklariniOku(win.webContents);
     if (sekmeler.size === 0) sekmeOlustur({});
     else { yerlesimGuncelle(); durumGonder(); }
   });

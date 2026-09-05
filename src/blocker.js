@@ -95,6 +95,11 @@ class Blocker {
     return this.listeler ? this.listeler.engelleniyorMu(host) : false;
   }
 
+  // Sec-CH-UA basliklarini uretecek islev; main.js baglar.
+  ipuclariniBagla(saglayici) {
+    this.ipucuSaglayici = saglayici;
+  }
+
   listeleriBagla(yonetici) {
     this.listeler = yonetici;
   }
@@ -117,6 +122,14 @@ class Blocker {
         headers['DNT'] = '1';
         headers['Sec-GPC'] = '1';
       }
+      /*
+       * Sec-CH-UA basliklari. Electron bunlari hic gondermiyor; User-Agent
+       * "Chrome/152" derken Client Hints'in hic olmamasi, bot korumalarinin
+       * baktigi bir tutarsizlik. Degerler sayfanin kendi userAgentData'sindan
+       * uretiliyor, yani yeni bir iddia eklemiyoruz.
+       */
+      const ipuclari = this.ipucuSaglayici ? this.ipucuSaglayici() : null;
+      if (ipuclari) Object.assign(headers, ipuclari);
       callback({ requestHeaders: headers });
     });
   }
