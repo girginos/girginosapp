@@ -67,6 +67,41 @@ function alanTemiz(host) {
   return ALAN_BICIMI.test(h) && !h.includes('..') ? h : '';
 }
 
+/*
+ * Govdeyi SINIRA KADAR okur, sonra baglantiyi keser.
+ *
+ * Once arrayBuffer() ile tamami belege aliniyor, boyut ONDAN SONRA
+ * denetleniyordu. content-length yoksa (chunked yanit) on denetim de sifir
+ * goruyor ve gecip gidiyordu. Olculdu: 600 MB akitan bir sunucu ANA sureci
+ * 118 MB'tan 1973 MB'a cikardi - simge adresini sayfa sectigi icin bunu
+ * herhangi bir web sayfasi tetikleyebiliyordu ve cokme sandbox'li bir
+ * olusturucuyu degil butun tarayiciyi goturuyordu.
+ */
+async function govdeyiOku(yanit) {
+  if (!yanit.body) {
+    const b = Buffer.from(await yanit.arrayBuffer());
+    return b.length > EN_BUYUK_BAYT ? null : b;
+  }
+  const okuyucu = yanit.body.getReader();
+  const parcalar = [];
+  let toplam = 0;
+  try {
+    for (;;) {
+      const { done, value } = await okuyucu.read();
+      if (done) break;
+      toplam += value.length;
+      if (toplam > EN_BUYUK_BAYT) {
+        await okuyucu.cancel().catch(() => {});
+        return null;
+      }
+      parcalar.push(Buffer.from(value));
+    }
+  } catch {
+    return null;
+  }
+  return Buffer.concat(parcalar);
+}
+
 class FaviconDeposu {
   /**
    * @param {object} p
@@ -176,7 +211,14 @@ class FaviconDeposu {
 
     if (!/^https?:\/\//i.test(faviconUrl)) return {};
 
-    const y = await this.oturum.fetch(faviconUrl, { cache: 'no-cache' });
+    /*
+     * CEREZSIZ. Simge adresini SAYFA seciyor: tek bir <link rel="icon"> ile
+     * herhangi bir siteye kimlikli istek attirilabiliyor ve yanitla yeni bir
+     * cerez yazdirilabiliyordu - engellemeye calistigimiz izleme pikselinin ta
+     * kendisi. Acilistaki on isitma da gecmisteki her siteye kimlikli bir
+     * "bu hesap simdi tarayici acti" bildirimi gonderiyordu. Olculdu.
+     */
+    const y = await this.oturum.fetch(faviconUrl, { cache: 'no-cache', credentials: 'omit' });
     if (y.status !== 200) return {};
 
     const tur = String(y.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
@@ -191,8 +233,8 @@ class FaviconDeposu {
     const uzunluk = Number(y.headers.get('content-length') || 0);
     if (uzunluk > EN_BUYUK_BAYT) return {};
 
-    const veri = Buffer.from(await y.arrayBuffer());
-    if (!veri.length || veri.length > EN_BUYUK_BAYT) return {};
+    const veri = await govdeyiOku(y);
+    if (!veri || !veri.length) return {};
 
     // Bildirilen türe değil, baytlara güven.
     const gercek = turuTespitEt(veri);

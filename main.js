@@ -23,8 +23,40 @@ const {
 } = require('./src/menu-yerlesim');
 const { SertifikaDeposu } = require('./src/sertifikalar');
 const { silinecekCerezler, cerezSilmeUrl } = require('./src/cerezler');
-const { vekilKurallari, adresGecerliMi } = require('./src/vekil');
+const { vekilKurallari, adresGecerliMi, atlamaGecerliMi } = require('./src/vekil');
 const { ipucuBasliklari } = require('./src/istemci-ipuclari');
+
+/*
+ * UCUNCU TARAF CEREZLERI: CHROMIUM'UN KENDI ENGELI.
+ *
+ * Bizim engelimiz webRequest uzerinden calisiyor ve yalnizca BASLIKLARI
+ * gorebiliyor. Olculdu: ucuncu taraf bir cercevenin document.cookie ile
+ * yazdigi kimlik dokunulmadan kaliyor, izleyici onu okuyup URL'e tasiyor.
+ * Yani "ucuncu taraf cerezler tasinmiyor" cumlesi yalnizca baslik icin
+ * dogruydu.
+ *
+ * Chromium'un kendi anahtari bu bosluğu kapatiyor - olculdu: anahtarsiz
+ * cerez kavanoza dusuyor, anahtarla hic yazilmiyor. Komut satiri anahtari
+ * uygulama hazir olmadan verilmeli, o yuzden ayar dosyasi burada dogrudan
+ * okunuyor; Store henuz kurulmus degil.
+ *
+ * SINIR: anahtar surec basina. Ayari degistirmek ya da bir siteye istisna
+ * vermek baslik katmanina hemen isliyor, bu katman icin yeniden baslatmak
+ * gerekiyor. Ayarlar sayfasi bunu yaziyor.
+ */
+function ucuncuTarafCerezAyariniOku() {
+  try {
+    const yol = path.join(app.getPath('userData'), 'pusula-veri.json');
+    const kayit = JSON.parse(require('node:fs').readFileSync(yol, 'utf8'));
+    return !(kayit && kayit.ayarlar && kayit.ayarlar.ucuncuTarafCerez === false);
+  } catch {
+    return true;   // ilk acilis: varsayilan acik
+  }
+}
+
+if (ucuncuTarafCerezAyariniOku()) {
+  app.commandLine.appendSwitch('test-third-party-cookie-phaseout');
+}
 
 // Şema ayrıcalıkları uygulama hazır olmadan bildirilmeli.
 protocol.registerSchemesAsPrivileged([{
@@ -62,6 +94,7 @@ let chromeYukseklik = VARSAYILAN_CHROME_YUKSEKLIK;
 // yan yana durdu; bu adlandırma hataya davetiyeydi.
 let panelAcik = false;
 const sekmeler = new Map();       // id -> sekme
+const kozmetikAnahtari = new Map(); // webContentsId -> insertCSS anahtari
 let aktifId = null;
 let sonrakiId = 1;
 const indirmeler = [];
@@ -204,7 +237,10 @@ function durumGonder() {
     })),
     toplamEngellenen: store.veri.istatistik.engellenen,
     indirmeler: indirmeler.slice(0, 30),
-    guncelleme: guncelleme ? guncelleme.bilgi() : null
+    guncelleme: guncelleme ? guncelleme.bilgi() : null,
+    // Chromium vekil kuralini reddettiyse arayuz bunu soylemeli; sessizce
+    // dogrudan baglanmak kullaniciyi korundugu sanisinda birakir.
+    vekilReddedildi
   });
 }
 
@@ -474,8 +510,19 @@ function olaylariBagla(t) {
   wc.on('did-stop-loading', () => { t.yukleniyor = false; tazele(); });
 
   wc.on('did-start-navigation', (e) => {
-    // Aynı belge içindeki (SPA rota) gezinmelerde engelleyici sayacını sıfırlama.
-    if (e.isMainFrame && !e.isSameDocument) blocker.ustAlanAyarla(wcId, e.url);
+    /*
+     * YALNIZCA SAYAC. Buraya ustAlanAyarla koymak haritayi henuz ISLENMEMIS
+     * bir gezinmenin adresiyle dolduruyordu; gezinme tamamlanmazsa (indirme
+     * baglantisi, 204 yanit) did-navigate de did-fail-load da GELMIYOR ve
+     * harita kalici olarak yanlis kaliyordu. Olculdu.
+     *
+     * Sonucu cerez sistemi geldikten sonra agirlasti: acik duran sayfanin her
+     * istegi ucuncu taraf sayilip cerezi kesiliyor, yani kullanici oturumdan
+     * dusuyor. Sayfa hala oradayken.
+     *
+     * Ayni belge icindeki (SPA rota) gezinmelerde sayac da sifirlanmiyor.
+     */
+    if (e.isMainFrame && !e.isSameDocument) blocker.sayaciSifirla(wcId);
   });
 
   wc.on('did-navigate', (_e, url) => {
@@ -486,6 +533,16 @@ function olaylariBagla(t) {
     kozmetigiUygula(wc, url);
     store.gecmiseEkle(url, t.baslik);
     tazele();
+  });
+
+  /*
+   * Alt cerceve SONRADAN olusuyor ve sonradan geziniyor. Ana cerceve
+   * icin yapilan enjeksiyon o anda henuz var olmayan cerceveye
+   * ulasmiyor; reklam cercevesi de zaten sayfadan sonra yukleniyor.
+   */
+  wc.on('did-frame-navigate', (_e, _url, _kod, _metin, anaCerceve) => {
+    if (anaCerceve) return;
+    altCerceveleriGiydir(wc, kozmetikCssAl(t.url));
   });
 
   wc.on('did-navigate-in-page', (_e, url, anaCerceve) => {
@@ -553,7 +610,7 @@ function olaylariBagla(t) {
   });
 
   wc.on('context-menu', (_e, params) => baglamMenusu(t, params));
-  wc.on('destroyed', () => blocker.unut(wcId));
+  wc.on('destroyed', () => { blocker.unut(wcId); kozmetikAnahtari.delete(wcId); });
 }
 
 // Harici uygulamaya devredilebilecek şemalar. Windows'ta search-ms:, ms-msdt:
@@ -851,8 +908,12 @@ async function kapanistaCerezleriSil() {
       return adres ? ses.cookies.remove(adres, c.name).catch(() => {}) : null;
     }));
   })();
+  let bitti = false;
+  is.then(() => { bitti = true; }).catch(() => {});
   const sinir = new Promise((coz) => setTimeout(coz, CEREZ_TEMIZLIK_SINIRI));
   await Promise.race([is.catch((e) => console.error('Çerezler silinemedi:', e.message)), sinir]);
+  // Sessizce yarim kalmasin: bir dahaki kapanista tamamlanacagini bilelim.
+  if (!bitti) console.error('Çerez temizliği ' + CEREZ_TEMIZLIK_SINIRI + ' ms icinde bitmedi; kalanlar bir sonraki kapanista silinecek.');
 }
 
 /*
@@ -865,17 +926,76 @@ async function kapanistaCerezleriSil() {
  * Engelleyici o site için kapatılmışsa CSS de uygulanmaz: "bu sitede kapat"
  * demek, kullanıcının gördüğü her şeyi kapsamalı.
  */
-function kozmetigiUygula(wc, url) {
-  if (!listeler || wc.isDestroyed()) return;
-  if (!store.ayarlar.engelleyiciAcik) return;
+function kozmetikCssAl(url) {
+  if (!listeler || !store.ayarlar.engelleyiciAcik) return '';
   const host = hostAl(url);
-  if (!host) return;
-  if (store.siteIzinliMi(kokAlanAdi(host))) return;
+  if (!host) return '';
+  if (store.siteIzinliMi(kokAlanAdi(host))) return '';
+  return listeler.kozmetikCss(host);
+}
 
-  const css = listeler.kozmetikCss(host);
-  if (!css) return;
-  // cssOrigin 'user': sayfanın kendi !important kuralları bunu ezemesin.
-  wc.insertCSS(css, { cssOrigin: 'user' }).catch(() => { /* gezinme değişmiş olabilir */ });
+async function kozmetigiUygula(wc, url) {
+  if (!wc || wc.isDestroyed()) return;
+  const css = kozmetikCssAl(url);
+
+  // Onceki gezinmenin stili varsa once kaldirilir; listeler guncellenince
+  // ayni sayfaya ikinci kez enjekte edildiginde kopya birikirdi.
+  const eskiAnahtar = kozmetikAnahtari.get(wc.id);
+  if (eskiAnahtar) {
+    kozmetikAnahtari.delete(wc.id);
+    await wc.removeInsertedCSS(eskiAnahtar).catch(() => { /* belge degismis olabilir */ });
+  }
+  if (!css || wc.isDestroyed()) return;
+
+  try {
+    // cssOrigin 'user': sayfanin kendi !important kurallari bunu ezemesin.
+    const anahtar = await wc.insertCSS(css, { cssOrigin: 'user' });
+    kozmetikAnahtari.set(wc.id, anahtar);
+  } catch { /* gezinme degismis olabilir */ }
+
+  altCerceveleriGiydir(wc, css);
+}
+
+/*
+ * ALT CERCEVELER.
+ *
+ * insertCSS yalnizca ANA cerceveye ulasiyor. Olculdu: ayni sayfadaki bir
+ * iframe icinde ayni secici uygulanmiyordu. Yayincilar kendi reklamlarini ve
+ * "reklam engelleyicinizi kapatin" seritlerini cogunlukla iframe'e koyuyor,
+ * yani ozelligin kendi gerekcesindeki durum kapsam disi kaliyordu.
+ *
+ * SINIR: cerceve basina insertCSS yok; stil, sayfanin kendi dunyasina bir
+ * <style> olarak ekleniyor. Sayfa onu kaldirabilir. Ana cerceve icin hala
+ * kullanici stil sayfasi kullaniliyor; bu yalnizca alt cerceveler icin.
+ */
+function altCerceveleriGiydir(wc, css) {
+  if (!css || wc.isDestroyed()) return;
+  let cerceveler;
+  try { cerceveler = wc.mainFrame.framesInSubtree; } catch { return; }
+
+  for (const cerceve of cerceveler) {
+    if (cerceve === wc.mainFrame) continue;
+    const kod = '(() => { const s = document.createElement("style");'
+      + ' s.textContent = ' + JSON.stringify(css) + ';'
+      + ' (document.head || document.documentElement).appendChild(s); })()';
+    try {
+      cerceve.executeJavaScript(kod, true).catch(() => { /* cerceve gitmis olabilir */ });
+    } catch { /* cerceve gitmis olabilir */ }
+  }
+}
+
+/*
+ * Listeler acilista ya da 6 saatlik denetimde GEZINMEDEN SONRA gelebiliyor.
+ * Ag engellemesi kendini toparliyor (her istekte yeniden degerlendiriliyor),
+ * kozmetik CSS toparlamiyor: bir kez enjekte ediliyor. Ilk calistirmada onbellek
+ * bos oldugu icin acilistan onceki 15 saniyede acilan her sayfa omru boyunca
+ * filtresiz kalirdi.
+ */
+function kozmetigiTazele() {
+  for (const t of sekmeler.values()) {
+    const wc = t.view.webContents;
+    if (!wc.isDestroyed() && t.url) kozmetigiUygula(wc, t.url);
+  }
 }
 
 async function siteVerisiSil(origin, host) {
@@ -1197,8 +1317,38 @@ function vekilOturumlari() {
 
 // Vekil acikken WebRTC gercek adresi acikca yayinlayabiliyor; bu bilinen bir
 // sizinti yolu ve vekilin butun anlamini goturur.
+/*
+ * WebRTC yalnizca KULLANICI bilerek vekil ayarladiginda sikilastiriliyor.
+ * Varsayilan kip 'sistem' oldugu icin bunu her zaman acmak, vekil kullanmayan
+ * herkesin gorusme uygulamalarini bozardi.
+ */
 function webrtcPolitikasi() {
-  return store.ayarlar.vekilKip === 'kapali' ? 'default' : 'disable_non_proxied_udp';
+  return store.ayarlar.vekilKip === 'elle' ? 'disable_non_proxied_udp' : 'default';
+}
+
+/*
+ * Chromium kuralimizi gercekten kabul etti mi?
+ *
+ * proxyRules bir URL degil, Chromium'un kendi mini dili; dizeye bakan hicbir
+ * denetim o ayristiriciyla tam ayni fikirde kalamaz. Reddedilen bir kural
+ * kume BOS birakiliyor ve her sey dogrudan gidiyor - ustelik sessizce.
+ * Uyguladiktan sonra karari geri okuyoruz: DIRECT geliyorsa erisilemeyen bir
+ * vekile geciyoruz, yani hata gorunur oluyor, sizinti degil.
+ */
+const VEKIL_SINAMA_ADRESI = 'https://ornek.gecersiz/';
+let vekilReddedildi = false;
+
+async function vekilKararaGore(o, ayar) {
+  await o.setProxy(ayar);
+  if (ayar.mode !== 'fixed_servers') return true;
+  const karar = await o.resolveProxy(VEKIL_SINAMA_ADRESI).catch(() => '');
+  if (!String(karar).startsWith('DIRECT')) return true;
+  await o.setProxy({
+    mode: 'fixed_servers',
+    proxyRules: 'http://0.0.0.0:1',
+    proxyBypassRules: ayar.proxyBypassRules
+  });
+  return false;
 }
 
 async function vekiliUygula() {
@@ -1208,20 +1358,33 @@ async function vekiliUygula() {
     ayar.proxyRules = kural.proxyRules;
     ayar.proxyBypassRules = kural.proxyBypassRules;
   }
+
+  let kabul = kural.gecerli !== false;
   for (const o of vekilOturumlari()) {
     try {
-      await o.setProxy(ayar);
+      if (!(await vekilKararaGore(o, ayar))) kabul = false;
+      /*
+       * ACIK BAGLANTILAR KAPATILIYOR. setProxy yalnizca YENI baglantilari
+       * etkiliyor; WebSocket ve HTTP/2 oturumlari gercek adresten konusmaya
+       * devam ediyordu. Kullanici vekili actigi anda anonim oldugunu sanarken
+       * acik sekmelerinin trafigi disari akmaya devam ediyordu. Olculdu.
+       */
+      await o.closeAllConnections();
     } catch (e) {
+      kabul = false;
       console.error('Vekil uygulanamadi:', e.message);
     }
   }
+  vekilReddedildi = !kabul;
+
   for (const t of sekmeler.values()) {
     const wc = t.view.webContents;
     if (!wc.isDestroyed()) wc.setWebRTCIPHandlingPolicy(webrtcPolitikasi());
   }
+  durumGonder();
 }
 
-function oturumKur() {
+async function oturumKur() {
   ses = session.fromPartition(OTURUM);
 
   /*
@@ -1255,7 +1418,7 @@ function oturumKur() {
         sonDegisiklik: y.headers.get('last-modified') || ''
       };
     },
-    degisti: durumGonder
+    degisti: () => { durumGonder(); kozmetigiTazele(); }
   });
   blocker.listeleriBagla(listeler);
 
@@ -1277,8 +1440,12 @@ function oturumKur() {
     })
   });
 
-  // Vekil, oturumlar kurulduktan hemen sonra: ilk istek cikmadan once.
-  vekiliUygula();
+  /*
+   * Vekil, oturumlar kurulduktan hemen sonra. AWAIT EDILIYOR: fire-and-forget
+   * birakilirsa "ilk istek cikmadan once" cumlesi yalnizca bir temenni olurdu.
+   * oturumKur() cagiran taraf pencereyi bundan sonra aciyor.
+   */
+  await vekiliUygula();
 
   /*
    * Kayıtlı karar + genel varsayılandan tek bir cevap üretir. Hem istek
@@ -1544,7 +1711,8 @@ const AYAR_DOGRULAMA = {
   // Bos adres kabul ediliyor: kullanici once kutuyu doldurup sonra kipi
   // degistirmek isteyebilir. Bos adresle "elle" kipi zaten istekleri kesiyor.
   vekilAdres: (v) => typeof v === 'string' && v.length <= 300 && (v === '' || adresGecerliMi(v)),
-  vekilAtla: (v) => typeof v === 'string' && v.length <= 1000,
+  // Tek bir "*" butun vekili sessizce kapatiyordu; girdiler dogrulaniyor.
+  vekilAtla: (v) => typeof v === 'string' && v.length <= 1000 && atlamaGecerliMi(v),
   gecmisiKaydet: (v) => typeof v === 'boolean',
   yerImleriCubugu: (v) => typeof v === 'boolean',
   filtreListeleriAcik: (v) => typeof v === 'boolean',
@@ -1921,23 +2089,38 @@ function ipcKur() {
 if (!app.requestSingleInstanceLock()) {
   app.quit();
 } else {
+  // Komut satirinda verilen ilk http(s) adresi. Isletim sisteminden bir
+  // baglanti acildiginda Electron adresi argv'ye koyuyor.
+  const argvAdresi = (argv) => (argv || []).find((a) => /^https?:\/\//i.test(a));
+
   app.on('second-instance', (_e, argv) => {
     if (!win || win.isDestroyed()) return;
     if (win.isMinimized()) win.restore();
     win.focus();
-    const url = argv.find(a => /^https?:\/\//i.test(a));
+    const url = argvAdresi(argv);
     if (url) sekmeOlustur({ url });
   });
 
-  app.whenReady().then(() => {
+  app.whenReady().then(async () => {
     store = new Store(path.join(app.getPath('userData'), 'pusula-veri.json'));
     diliUygula();
     // Pencere olusmadan once: arka plan rengi ve baslik cubugu dogru temayla acilsin.
     temayiUygula();
-    oturumKur();
+    // Vekil de burada uygulaniyor; pencere ondan SONRA aciliyor ki ilk istek
+    // her zaman dogru yapilandirmayla ciksin.
+    await oturumKur();
     ipcKur();
     menuKur();
     pencereOlustur();
+
+    /*
+     * ILK ACILISTA da komut satirindaki adres aciliyor. Yalnizca
+     * second-instance'ta bakiliyordu: tarayici KAPALIYKEN isletim sisteminden
+     * bir baglanti acmak uygulamayi baslatiyor ama bos yeni sekmede
+     * birakiyordu - hicbir hata yok, sadece istenen sayfa gelmiyor.
+     */
+    const acilisAdresi = argvAdresi(process.argv);
+    if (acilisAdresi) sekmeOlustur({ url: acilisAdresi });
 
     // Önbellekteki listeleri yükler, ardından bayat olanları arka planda çeker.
     listeler.baslat().catch(e => console.error('Filtre listeleri başlatılamadı:', e.message));

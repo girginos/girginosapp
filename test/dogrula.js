@@ -381,9 +381,17 @@ esit('her kayıt geçerli alan adı biçiminde', LISTE.filter(d => !ALAN_BICIMI.
   esit('site istisnası Blocker’a da işler', bl.cerezTasinirMi(istek({})), true);
   sahteStore.cerezIstisnalari.length = 0;
 
-  // Sekmeye bağlanamayan istek: üst alan bilinmiyor, dokunmuyoruz.
-  esit('sekmesiz istekte kesilmez',
-    bl.cerezTasinirMi(istek({ webContentsId: undefined })), true);
+  /*
+   * SEKMEYE BAGLANAMAYAN ISTEK. Service worker'dan cikan her istek boyle
+   * geliyor ve eskiden hepsi engelden muaftı: ucuncu taraf bir cerceve kendi
+   * worker'ini kaydedip hem cerezini tasiyor hem de Set-Cookie ile yeni kimlik
+   * yazdirabiliyordu. Artik istegin koku acik sekmelerden birinin ust alan adi
+   * DEGILSE ucuncu taraf sayiliyor.
+   */
+  esit('sekmesiz yabanci istek kesilir',
+    bl.cerezTasinirMi(istek({ webContentsId: undefined })), false);
+  esit('sekmesiz istek acik sitenin kendi kokune ise kesilmez',
+    bl.cerezTasinirMi(istek({ url: 'https://haber.com/sw-fetch', webContentsId: undefined })), true);
 
   /* kapanışta silme */
   const cerezler = [
@@ -443,7 +451,14 @@ esit('her kayıt geçerli alan adı biçiminde', LISTE.filter(d => !ALAN_BICIMI.
   esit('bos girdi cokmez', atlamaKurali('').includes('localhost'), true);
 
   esit('kapali kip dogrudan', vekilKurallari({ vekilKip: 'kapali' }).mode, 'direct');
-  esit('ayar yoksa dogrudan', vekilKurallari({}).mode, 'direct');
+  /*
+   * AYAR YOKSA SISTEM. Varsayilan 'kapali' + mode 'direct' idi; bu surumden
+   * once hic setProxy cagrilmadigi icin isletim sisteminin vekilini kullanan
+   * herkesin baglantisini keserdi (kurumsal ag, PAC dosyasi), ustelik sebebini
+   * hicbir yerde yazmadan.
+   */
+  esit('ayar yoksa sistem', vekilKurallari({}).mode, 'system');
+  esit('kapali kip bilerek dogrudan', vekilKurallari({ vekilKip: 'kapali' }).mode, 'direct');
   esit('sistem kipi', vekilKurallari({ vekilKip: 'sistem' }).mode, 'system');
 
   const elle = vekilKurallari({ vekilKip: 'elle', vekilAdres: 'socks5://127.0.0.1:9050', vekilAtla: '' });
@@ -538,6 +553,85 @@ esit('her kayıt geçerli alan adı biçiminde', LISTE.filter(d => !ALAN_BICIMI.
   oteki.ekle(coz('haber.com##.ikinci-liste'));
   geri.birlestir(oteki);
   esit('listeler birleşir', geri.seciciler('haber.com').includes('.ikinci-liste'), true);
+
+  /*
+   * CSS'ten KAÇIŞ. Bir seçicinin kendi demetini bozması kabul edilebilir;
+   * kalan seçicileri de yutması değil. Ölçüldü: tek bir "/*" bütün kozmetik
+   * filtrelemeyi kapatıyor, çünkü açılan açıklama stil sayfasının sonuna
+   * kadar sürüyor ve demetlere bölmenin sınırlaması devre dışı kalıyor.
+   */
+  const { seciciGuvenliMi } = require('../src/kozmetik');
+  esit('açıklama açan seçici reddedilir', seciciGuvenliMi('a/*'), false);
+  esit('açıklama kapatan seçici reddedilir', seciciGuvenliMi('a*/b'), false);
+  esit('kapanmamış parantez reddedilir', seciciGuvenliMi('a:is('), false);
+  esit('kapanmamış köşeli parantez reddedilir', seciciGuvenliMi('a[href'), false);
+  esit('ters sırada parantez reddedilir', seciciGuvenliMi('a)b('), false);
+  esit('süslü parantez reddedilir', seciciGuvenliMi('a{b}'), false);
+  esit('dengeli seçici kabul edilir', seciciGuvenliMi('a[href="x"]:not(.y)'), true);
+  esit('kuralCoz açıklama açanı da eler', kuralCoz('##a/*'), null);
+
+  /*
+   * Uzantı söz dizimlerinin HEPSİ elenmeli. Denetim daraltılırsa geçersiz
+   * seçiciler CSS'e girer ve demetlerini düşürür.
+   */
+  const uzantililar = [
+    '##div:has-text(reklam)', '##div:matches-css(display: none)', '##div:matches-media(min-width)',
+    '##div:matches-path(/x)', '##div:matches-attr(a)', '##:xpath(//div)', '##div:upward(2)',
+    '##div:remove(', '##div:nth-ancestor(1)', '##div:watch-attr(class)',
+    '##div:min-text-length(5)', '##div:others(x)', '##div:style(color: red)', '##div:-abp-has(a)'
+  ];
+  for (const u of uzantililar) esit('uzantı söz dizimi elenir: ' + u, kuralCoz(u), null);
+
+  /*
+   * Ayraçtan önceki kısım alan adı listesi olmalı; hosts dosyalarındaki
+   * "# şurada ## geçiyor" yorumu kozmetik kural sanılırdı.
+   */
+  esit('yorum satırı kural sayılmaz', kuralCoz('# şurada ## geçiyor'), null);
+  esit('boşluklu alan bölümü reddedilir', kuralCoz('a b##.x'), null);
+
+  // DEMET küçük olmalı; büyütülürse hasarı sınırlama işlevi kalmaz.
+  esit('demet boyu küçük', DEMET <= 50 && DEMET >= 2, true);
+}
+
+/* ---- filtre listesi yöneticisi ---- */
+{
+  const { ayristir } = require('../src/listeler');
+
+  const c = ayristir([
+    '! Title: Deneme',
+    '##.genel',
+    'ornek.com##.ozel',
+    '#@#.genel-istisna',
+    '||izleyici.com^'
+  ].join('\n'));
+
+  esit('genel kozmetik kural ayrıştırılır', c.kozmetik.genel.length, 1);
+  esit('alana özel kural ayrıştırılır', Object.keys(c.kozmetik.alan).length, 1);
+  esit('alan adsız istisna ayrıştırılır', c.kozmetik.genelIstisna.length, 1);
+  esit('ağ kuralı hâlâ ayrıştırılır', c.alanlar.length, 1);
+  esit('liste başlığı okunur', c.meta.baslik, 'Deneme');
+}
+
+/* ---- kapanışta korunan kökler ---- */
+{
+  const { Store } = require('../src/store');
+  const os2 = require('node:os');
+  const yol2 = require('node:path').join(os2.tmpdir(), 'korunan-deneme-' + process.pid + '.json');
+  const st = new Store(yol2);
+
+  st.yerImiDegistir('https://www.banka.com/giris', 'Banka');
+  st.yerImiDegistir('bu adres değil', 'Bozuk');
+  const korunan = st.korunanCerezKokleri(kokAlanAdi);
+  esit('yer iminin kökü korunur', korunan.has('banka.com'), true);
+  // Bozuk adres yüzünden döngü kırılırsa sonraki yer imleri hiç korunmazdı.
+  esit('bozuk yer imi atlanır, çökmez', korunan.size, 1);
+
+  st.cerezIstisnasiDegistir('ornek.com');
+  esit('çerez istisnası kaydedilir', st.cerezIstisnasiMi('ornek.com'), true);
+  st.izinleriTemizle();
+  esit('izin sıfırlama çerez istisnalarını da siler', st.cerezIstisnasiMi('ornek.com'), false);
+
+  try { require('node:fs').unlinkSync(yol2); } catch { /* olsun */ }
 }
 
 if (hatalar.length) {

@@ -697,7 +697,15 @@ svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width:
 .ayar .a-aciklama { color: var(--metin2); font-size: 11.5px; margin-top: 3px; line-height: 1.4; }
 /* Reddedilen ayar uyarisi: sessizce yok sayilan bir deger kullaniciyi
    korundugunu sanarak birakirdi. */
-.ayar .a-uyari { color: var(--tehlike); margin: -4px 0 10px; }
+/* Uyari satiri .ayar-grup'un DOGRUDAN cocugu; ".ayar .a-uyari" hicbir zaman
+   eslesmiyordu, yani reddedilen ayar uyarisi normal aciklama gibi gorunuyordu.
+   Tam bu hata sinifi icin yazilmis muhafiz da yanlis gecmisti. */
+.ayar-grup > .a-uyari {
+  color: var(--tehlike);
+  font-size: 11.5px;
+  line-height: 1.4;
+  margin: 6px 2px 12px;
+}
 
 .ayar select, .ayar input[type="text"] {
   flex: 0 0 auto;

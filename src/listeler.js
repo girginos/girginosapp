@@ -34,11 +34,11 @@ const ILK_KONTROL_GECIKMESI_MS = 15 * 1000; // açılışı yavaşlatmamak için
 const EN_AZ_KURAL = 20;                     // bundan azı "liste bozuk" sayılır
 
 /*
- * Onbellek bicimi. Kozmetik kurallar 2. bicimle geldi; eski bir dosyada o alan
+ * Onbellek bicimi. Kozmetik kurallar 2. bicimle geldi, 3. bicimde kural yapisi degisti; eski bir dosyada o alan
  * hic yok ve ham metin saklanmadigi icin sonradan uretilemiyor. Numara
  * artirilinca eski onbellekler yok sayilir ve liste yeniden indirilir.
  */
-const BICIM = 2;
+const BICIM = 3;
 const CSS_ONBELLEK_SINIRI = 500;
 
 // Yalnızca tek bir ana makine adı: joker, yol, port yok.

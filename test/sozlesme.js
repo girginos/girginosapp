@@ -81,6 +81,13 @@ const duzOnKanallar = topla(main, /(?:^|[^.\w])on\('([^']+)'/gm);
  * düşüldü; artık mekanik olarak denetleniyor.
  */
 const testDosyalari = ['test/dogrula.js', 'test/guvenlik.js', 'test/guncelleme.js'];
+/*
+ * Electron testleri ayni tuzagi tasiyor ama baska bir bicimde: iddia islevi
+ * esit() degil bak(), ozet de hatalar dizisi degil sonuc dizisi uzerinden
+ * hesaplaniyor. Denetim bunlari kapsamiyordu; ozetten SONRA eklenmis bir
+ * iddianin sessizce yutuldugu olcum yapilarak dogrulandi.
+ */
+const electronTestleri = ['test/electron-cerez.js', 'test/electron-kozmetik.js', 'test/electron-vekil.js'];
 const olusuzIddialar = [];
 for (const t of testDosyalari) {
   const metin = oku(t);
@@ -90,11 +97,34 @@ for (const t of testDosyalari) {
   const sayi = (sonrasi.match(/esit\(/g) || []).length;
   if (sayi > 0) olusuzIddialar.push(t + ' (' + sayi + ' iddia sonuç kontrolünden sonra)');
 }
+for (const t of electronTestleri) {
+  const metin = oku(t);
+  const i = metin.indexOf('const hata = sonuc.filter');
+  if (i < 0) { olusuzIddialar.push(t + ' (sonuç kontrolü bulunamadı)'); continue; }
+  const sayi = (metin.slice(i).match(/bak\(/g) || []).length;
+  if (sayi > 0) olusuzIddialar.push(t + ' (' + sayi + ' iddia sonuç kontrolünden sonra)');
+}
+
+/*
+ * Electron testleri firlatan bir regresyonda ASILMAMALI.
+ *
+ * Olculdu: main sureçte bir istisna yalnizca UnhandledPromiseRejectionWarning
+ * basiyor, ozet hic yazilmiyor, app.exit() hic cagrilmiyor ve surec sonsuza
+ * kadar bekliyor. "npm run test-electron" boyle bir regresyonda basarisiz
+ * olmuyor, CI'i durduruyor. Her testin kendi yakalayicisi olmali.
+ */
+const yakalayicisiz = [];
+for (const t of electronTestleri) {
+  const metin = oku(t);
+  if (!metin.includes("process.on('unhandledRejection'")) yakalayicisiz.push(t + ' -> unhandledRejection');
+  if (!metin.includes("process.on('uncaughtException'")) yakalayicisiz.push(t + ' -> uncaughtException');
+}
 
 // Ham kontrol karakteri kaynakta durmamalı: grep dosyayı ikili sayıyor,
 // editörler sessizce siliyor.
 const hamKontrol = [];
-for (const t of [...testDosyalari, 'main.js', 'ui/app.js']) {
+for (const t of [...testDosyalari, ...electronTestleri, 'main.js', 'ui/app.js',
+  'src/blocker.js', 'src/kozmetik.js', 'src/vekil.js', 'src/cerezler.js', 'src/listeler.js', 'src/store.js']) {
   const say = [...oku(t)].filter((c) => {
     const k = c.codePointAt(0);
     return k < 9 || (k > 13 && k < 32);
@@ -111,6 +141,11 @@ function koduSadelestir(metin) {
   // Yorumlar ve dize/sablon icerikleri cikariliyor: oralardaki buyuk harfli
   // kelimeler (HTML, CVE, SONRA...) tanimlayici degil.
   return metin
+    // Duzenli ifade govdesindeki buyuk harfli kelimeler tanimlayici degil;
+    // main.js'teki bir /^DIRECT/ bu yuzden "tanimsiz sabit" diye raporlanmisti.
+    // Bolme islemiyle karismasin diye yalnizca bir isleci izleyen egik cizgi
+    // duzenli ifade sayiliyor.
+    .replace(/(^|[=(,:!&|?{};\s])\/(?![*/])(?:\\.|\[(?:\\.|[^\]\\])*\]|[^/\\\n])+\/[gimsuy]*/g, '$1/x/')
     .replace(/\/\*[\s\S]*?\*\//g, ' ')
     .replace(/(^|[^:])\/\/[^\n]*/g, '$1 ')
     .replace(/'(?:[^'\\\n]|\\.)*'/g, "''")
@@ -226,6 +261,7 @@ const denetimler = [
   ['tanimsiz sabit (calisinca ReferenceError)', tanimsizSabitler],
   ['CSS kurali olmayan sinif', kuralsizSiniflar],
   ['sonuç kontrolünden sonra iddia', olusuzIddialar],
+  ['Electron testinde hata yakalayıcı yok (asılır)', yakalayicisiz],
   ['kaynakta ham kontrol karakteri', hamKontrol],
   ['katman kanalı arayüz kapısında (sessizce düşer)',
     [...duzOnKanallar].filter((k) => k.startsWith('katman:'))],

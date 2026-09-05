@@ -22,7 +22,7 @@ const DEFAULTS = {
     kapanistaCerezSil: false,
     // Vekil sunucu. 'kapali' | 'sistem' | 'elle'
     // Tor için: elle + socks5://127.0.0.1:9050
-    vekilKip: 'kapali',
+    vekilKip: 'sistem',
     vekilAdres: '',
     vekilAtla: '',
     gecmisiKaydet: true,
@@ -98,6 +98,21 @@ class Store {
         ...DEFAULTS.ayarlar.izinVarsayilan,
         ...((kayit.ayarlar && kayit.ayarlar.izinVarsayilan) || {})
       };
+      /*
+       * DİZİ OLMASI GEREKEN ALANLAR ZORLANIYOR.
+       *
+       * Bu dosya elle düzenlenebiliyor (yeni sekme kartları için öyle
+       * söylüyoruz). Bir dizi alanı yanlışlıkla nesne ya da metin olursa
+       * .includes çağrısı fırlıyor; o çağrı webRequest işleyicisinin içinde
+       * olduğu için tarayıcıda HİÇBİR istek tamamlanmıyordu. Ölçüldü.
+       */
+      for (const alan of ['gecmis', 'yerImleri', 'siteIzinleri', 'cerezIstisnalari']) {
+        if (!Array.isArray(this.veri[alan])) this.veri[alan] = [];
+      }
+      if (!this.veri.izinler || typeof this.veri.izinler !== 'object' || Array.isArray(this.veri.izinler)) {
+        this.veri.izinler = {};
+      }
+      if (!Array.isArray(this.veri.ayarlar.ekListeler)) this.veri.ayarlar.ekListeler = [];
     } catch {
       // İlk açılış ya da bozuk dosya: varsayılanlarla devam.
     }

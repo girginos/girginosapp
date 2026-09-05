@@ -1300,9 +1300,20 @@ function ayarlarPaneli() {
    * kaydedildiğini sanır ve korunduğunu düşünerek gezerdi.
    */
   const vekilUyari = document.createElement('div');
-  vekilUyari.className = 'a-aciklama a-uyari';
+  vekilUyari.className = 'a-uyari';
   vekilUyari.hidden = true;
   vekilUyari.textContent = cev('ayar.vekilAdresHatali');
+
+  /*
+   * Chromium kurali reddettiyse bunu da soyluyoruz. Dizeye bakan dogrulama
+   * Chromium'un ayristiricisiyla her zaman ayni fikirde olamaz; o durumda
+   * baglanti erisilemeyen bir vekile gidiyor ve kullanici NEDEN calismadigini
+   * bilmeli.
+   */
+  const vekilRet = document.createElement('div');
+  vekilRet.className = 'a-uyari';
+  vekilRet.hidden = !durum.vekilReddedildi;
+  vekilRet.textContent = cev('ayar.vekilReddedildi');
 
   vekilAdres.type = 'text';
   vekilAdres.value = a.vekilAdres || '';
@@ -1314,12 +1325,22 @@ function ayarlarPaneli() {
   });
   g.appendChild(ayarSatiri(cev('ayar.vekilAdres'), cev('ayar.vekilAdresAciklama'), vekilAdres));
   g.appendChild(vekilUyari);
+  g.appendChild(vekilRet);
 
   vekilAtla.type = 'text';
   vekilAtla.value = a.vekilAtla || '';
   vekilAtla.placeholder = 'ornek.com, 192.168.1.1';
-  vekilAtla.addEventListener('change', () => window.pusula.ayarDegistir('vekilAtla', vekilAtla.value.trim()));
+  const vekilAtlaUyari = document.createElement('div');
+  vekilAtlaUyari.className = 'a-uyari';
+  vekilAtlaUyari.hidden = true;
+  vekilAtlaUyari.textContent = cev('ayar.vekilAtlaHatali');
+  vekilAtla.addEventListener('change', async () => {
+    const yeni = vekilAtla.value.trim();
+    const sonuc = await window.pusula.ayarDegistir('vekilAtla', yeni);
+    vekilAtlaUyari.hidden = !sonuc || sonuc.vekilAtla === yeni;
+  });
   g.appendChild(ayarSatiri(cev('ayar.vekilAtla'), cev('ayar.vekilAtlaAciklama'), vekilAtla));
+  g.appendChild(vekilAtlaUyari);
   elleAlanlari();
 
   /* ---- filtre listeleri ---- */

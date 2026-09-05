@@ -54,6 +54,26 @@ function bak(ad, bulunan, beklenen) {
                   '\n         beklenen: ' + JSON.stringify(beklenen)));
 }
 
+/*
+ * Firlatan bir regresyon testi ASMASIN.
+ *
+ * Olculdu: main sureçteki bir istisna yalnizca bir uyari basiyor; ozet hic
+ * yazilmiyor, app.exit() hic cagrilmiyor ve surec sonsuza kadar bekliyor.
+ * Yanlis deger donduren regresyon basarisiz oluyordu, FIRLATAN regresyon ise
+ * CI'i durduruyordu.
+ */
+function olumcul(neden, hata) {
+  console.error('\n  HATA ' + neden + ': ' + ((hata && hata.stack) || hata));
+  app.exit(1);
+}
+process.on('unhandledRejection', (h) => olumcul('yakalanmamis reddetme', h));
+process.on('uncaughtException', (h) => olumcul('yakalanmamis istisna', h));
+
+// Sessizce asilma ihtimaline karsi ust sinir.
+const OLCUM_SINIRI_MS = Number(process.env.OLCUM_SINIRI_MS || 120000);
+setTimeout(() => olumcul('sure asimi (' + OLCUM_SINIRI_MS + ' ms)', new Error('test bitmedi')),
+  OLCUM_SINIRI_MS).unref();
+
 app.whenReady().then(async () => {
   await new Promise((c) => vekil.listen(VEKIL_PORT, '127.0.0.1', c));
   await new Promise((c) => hedef.listen(HEDEF_PORT, '127.0.0.1', c));

@@ -36,6 +36,34 @@ const UZANTI_SOZDIZIMI =
  */
 const DEMET = 20;
 
+/*
+ * Seçici, enjekte edilen stil sayfasından KAÇAMAMALI.
+ *
+ * Bir seçicinin kendi demetini bozması kabul edilebilir; asıl tehlike, kalan
+ * seçicileri de yutması. Ölçüldü: tek bir "/*" bütün kozmetik filtrelemeyi
+ * kapatıyor, çünkü açılan CSS açıklaması stil sayfasının SONUNA kadar sürüyor
+ * ve demetlere bölmenin sağladığı sınırlama tamamen devre dışı kalıyor. Kapanış
+ * dizisi de reddedildiği için o açıklama hiçbir yerde kapanamıyor. Aynısı
+ * kapanmamış parantez ve köşeli parantez için de geçerli.
+ *
+ * Süslü parantez, blok içeriğini yazmaya çalışan bir kuralın işareti.
+ */
+function seciciGuvenliMi(secici) {
+  if (/[{}]/.test(secici)) return false;
+  if (secici.includes('/*') || secici.includes('*/')) return false;
+
+  let parantez = 0;
+  let kose = 0;
+  for (const k of secici) {
+    if (k === '(') parantez++;
+    else if (k === ')') parantez--;
+    else if (k === '[') kose++;
+    else if (k === ']') kose--;
+    if (parantez < 0 || kose < 0) return false;
+  }
+  return parantez === 0 && kose === 0;
+}
+
 /**
  * Tek bir kozmetik filtre satırını çözer.
  * @returns {{tip:'gizle'|'istisna', alanlar:string[], eksiler:string[], secici:string}|null}
@@ -52,10 +80,7 @@ function kuralCoz(satir) {
   if (tip === '#?#' || tip === '#$#') return null;
 
   const secici = satir.slice(yer + tip.length).trim();
-  if (!secici || UZANTI_SOZDIZIMI.test(secici)) return null;
-  // Süslü parantez ya da açıklama kapatma dizisi, enjekte edilen CSS'ten
-  // kaçıp kendi kuralını yazabilirdi.
-  if (/[{}]/.test(secici) || secici.includes('*/')) return null;
+  if (!secici || UZANTI_SOZDIZIMI.test(secici) || !seciciGuvenliMi(secici)) return null;
 
   /*
    * Ayraçtan önceki kısım bir alan adı listesi olmalı. Hosts dosyalarındaki
@@ -109,16 +134,25 @@ function alanUyar(kuralAlan, host) {
 }
 
 class KozmetikDepo {
+  /*
+   * DIŞLAMALAR KURALIN KENDİSİNE BAĞLI, SEÇİCİYE DEĞİL.
+   *
+   * Önce "secici -> dışlanan alanlar" diye tek bir harita vardı. Ölçüldü,
+   * yanlıştı: bir kuralın dışlaması, AYNI seçiciyi kullanan başka her kuralı da
+   * bastırıyordu. Gerçek listelerde ".ad" ve ".banner" gibi seçiciler yüzlerce
+   * kuralda geçiyor, yani birleştirilen listelerde sessiz eksik-engelleme.
+   * Şimdi her kural kendi dışlamalarını taşıyor.
+   */
   constructor() {
-    this.genel = new Set();            // her yerde uygulanan seçiciler
-    this.alan = new Map();             // kuralAlan -> Set(secici)
-    this.istisna = new Map();          // kuralAlan -> Set(secici)
-    this.eksi = new Map();             // secici -> Set(kuralAlan) ("~" ile dışlananlar)
+    this.genel = [];              // [{ secici, eksiler }] - her yerde geçerli
+    this.alan = new Map();        // kuralAlan -> [{ secici, eksiler }]
+    this.istisna = new Map();     // kuralAlan -> Set(secici)
+    this.genelIstisna = new Set(); // alan adı yazılmamış "#@#" kuralları
   }
 
   get sayi() {
-    let n = this.genel.size;
-    for (const s of this.alan.values()) n += s.size;
+    let n = this.genel.length;
+    for (const k of this.alan.values()) n += k.length;
     return n;
   }
 
@@ -127,6 +161,12 @@ class KozmetikDepo {
     const { tip, alanlar, eksiler, secici } = kural;
 
     if (tip === 'istisna') {
+      /*
+       * Alan adı yazılmamış "#@#" kuralı ATILMIYORDU ama hiçbir yere de
+       * konmuyordu: sayılıyor, listede görünüyor, hiçbir şey yapmıyordu.
+       * "Bozulan siteyi düzelt" listeleri tam olarak bunu kullanıyor.
+       */
+      if (!alanlar.length) { this.genelIstisna.add(secici); return; }
       for (const d of alanlar) {
         if (!this.istisna.has(d)) this.istisna.set(d, new Set());
         this.istisna.get(d).add(secici);
@@ -134,58 +174,54 @@ class KozmetikDepo {
       return;
     }
 
-    for (const d of eksiler) {
-      if (!this.eksi.has(secici)) this.eksi.set(secici, new Set());
-      this.eksi.get(secici).add(d);
-    }
-
-    if (!alanlar.length) { this.genel.add(secici); return; }
+    const giris = eksiler.length ? { secici, eksiler } : { secici };
+    if (!alanlar.length) { this.genel.push(giris); return; }
     for (const d of alanlar) {
-      if (!this.alan.has(d)) this.alan.set(d, new Set());
-      this.alan.get(d).add(secici);
+      if (!this.alan.has(d)) this.alan.set(d, []);
+      this.alan.get(d).push(giris);
     }
   }
 
   // Düz nesne olarak dışa aktarım (önbelleğe yazmak için).
   disaAktar() {
-    const nesne = (harita) => {
-      const o = {};
-      for (const [k, v] of harita) o[k] = [...v];
-      return o;
-    };
+    const kurallar = (liste) => liste.map((k) => (k.eksiler ? [k.secici, k.eksiler] : k.secici));
+    const nesne = {};
+    for (const [k, v] of this.alan) nesne[k] = kurallar(v);
+    const istisnaNesne = {};
+    for (const [k, v] of this.istisna) istisnaNesne[k] = [...v];
     return {
-      genel: [...this.genel],
-      alan: nesne(this.alan),
-      istisna: nesne(this.istisna),
-      eksi: nesne(this.eksi)
+      genel: kurallar(this.genel),
+      alan: nesne,
+      istisna: istisnaNesne,
+      genelIstisna: [...this.genelIstisna]
     };
   }
 
   static iceAktar(veri) {
     const d = new KozmetikDepo();
     if (!veri) return d;
-    for (const s of veri.genel || []) d.genel.add(s);
-    const harita = (o, hedef) => {
-      for (const [k, v] of Object.entries(o || {})) hedef.set(k, new Set(v));
-    };
-    harita(veri.alan, d.alan);
-    harita(veri.istisna, d.istisna);
-    harita(veri.eksi, d.eksi);
+    const coz = (liste) => (liste || []).map(
+      (k) => (Array.isArray(k) ? { secici: k[0], eksiler: k[1] } : { secici: k })
+    );
+    d.genel = coz(veri.genel);
+    for (const [k, v] of Object.entries(veri.alan || {})) d.alan.set(k, coz(v));
+    for (const [k, v] of Object.entries(veri.istisna || {})) d.istisna.set(k, new Set(v));
+    for (const s of veri.genelIstisna || []) d.genelIstisna.add(s);
     return d;
   }
 
   // Başka bir deponun kurallarını üstüne yığar (birden çok liste için).
   birlestir(oteki) {
-    for (const s of oteki.genel) this.genel.add(s);
-    const kat = (kaynak, hedef) => {
-      for (const [k, v] of kaynak) {
-        if (!hedef.has(k)) hedef.set(k, new Set());
-        for (const s of v) hedef.get(k).add(s);
-      }
-    };
-    kat(oteki.alan, this.alan);
-    kat(oteki.istisna, this.istisna);
-    kat(oteki.eksi, this.eksi);
+    this.genel.push(...oteki.genel);
+    for (const [k, v] of oteki.alan) {
+      if (!this.alan.has(k)) this.alan.set(k, []);
+      this.alan.get(k).push(...v);
+    }
+    for (const [k, v] of oteki.istisna) {
+      if (!this.istisna.has(k)) this.istisna.set(k, new Set());
+      for (const s of v) this.istisna.get(k).add(s);
+    }
+    for (const s of oteki.genelIstisna) this.genelIstisna.add(s);
   }
 
   /**
@@ -195,24 +231,24 @@ class KozmetikDepo {
   seciciler(host) {
     if (!host) return [];
 
-    const disla = new Set();
+    const disla = new Set(this.genelIstisna);
     for (const [kuralAlan, kume] of this.istisna) {
       if (!alanUyar(kuralAlan, host)) continue;
       for (const s of kume) disla.add(s);
     }
 
     const cikti = new Set();
-    const uygunMu = (s) => {
-      if (disla.has(s)) return false;
-      const eksiler = this.eksi.get(s);
-      if (eksiler) for (const d of eksiler) if (alanUyar(d, host)) return false;
-      return true;
+    const kat = (liste) => {
+      for (const k of liste) {
+        if (disla.has(k.secici)) continue;
+        if (k.eksiler && k.eksiler.some((d) => alanUyar(d, host))) continue;
+        cikti.add(k.secici);
+      }
     };
 
-    for (const s of this.genel) if (uygunMu(s)) cikti.add(s);
-    for (const [kuralAlan, kume] of this.alan) {
-      if (!alanUyar(kuralAlan, host)) continue;
-      for (const s of kume) if (uygunMu(s)) cikti.add(s);
+    kat(this.genel);
+    for (const [kuralAlan, liste] of this.alan) {
+      if (alanUyar(kuralAlan, host)) kat(liste);
     }
     return [...cikti];
   }
@@ -230,6 +266,26 @@ class KozmetikDepo {
     }
     return parcalar.join('\n');
   }
+
+  /*
+   * Geçersiz seçicileri atar. Denetleyici bir işlev alıyor çünkü CSS'i gerçekten
+   * ayrıştırabilen tek yer bir oluşturucu (renderer); burada saf kalıyoruz.
+   * Karakter denetimi bilinen kaçış yollarını kapatır, bu ise geriye kalan
+   * her şeyi: gerçek ayrıştırıcının reddettiği seçici hiç yazılmaz.
+   */
+  suz(gecerliMi) {
+    const suzListe = (liste) => liste.filter((k) => gecerliMi(k.secici));
+    let atilan = this.genel.length;
+    this.genel = suzListe(this.genel);
+    atilan -= this.genel.length;
+    for (const [k, v] of this.alan) {
+      const yeni = suzListe(v);
+      atilan += v.length - yeni.length;
+      if (yeni.length) this.alan.set(k, yeni);
+      else this.alan.delete(k);
+    }
+    return atilan;
+  }
 }
 
-module.exports = { KozmetikDepo, kuralCoz, alanUyar, UZANTI_SOZDIZIMI, DEMET };
+module.exports = { KozmetikDepo, kuralCoz, alanUyar, seciciGuvenliMi, UZANTI_SOZDIZIMI, DEMET };
