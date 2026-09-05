@@ -229,7 +229,7 @@ function listeOnbellegiYaz(dizin) {
 
   fs.mkdirSync(dizin, { recursive: true });
   fs.writeFileSync(path.join(dizin, 'easylist.json'), JSON.stringify({
-    bicim: 3,
+    bicim: 4,
     url: 'https://easylist.to/easylist/easylist.txt',
     ustBilgi: {
       baslik: 'Deneme', surum: '1', gecerlilikSaat: 999,
@@ -237,7 +237,8 @@ function listeOnbellegiYaz(dizin) {
     },
     alanlar: ['izleyici-denemesi.test'],
     istisnalar: [],
-    kozmetik: kurallar
+    kozmetik: kurallar,
+    betik: { genel: [], alan: {}, istisna: {}, genelIstisna: [] }
   }), 'utf8');
 }
 

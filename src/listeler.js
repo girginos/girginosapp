@@ -6,6 +6,7 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { IKI_SEVIYELI } = require('./blocker');
 const { KozmetikDepo, kuralCoz } = require('./kozmetik');
+const { BetikDepo, betikCoz, yerleşikDepo } = require('./betikler');
 
 /*
  * Filtre listesi yöneticisi.
@@ -38,7 +39,7 @@ const EN_AZ_KURAL = 20;                     // bundan azı "liste bozuk" sayıl�
  * hic yok ve ham metin saklanmadigi icin sonradan uretilemiyor. Numara
  * artirilinca eski onbellekler yok sayilir ve liste yeniden indirilir.
  */
-const BICIM = 3;
+const BICIM = 4;
 const CSS_ONBELLEK_SINIRI = 500;
 
 // Yalnızca tek bir ana makine adı: joker, yol, port yok.
@@ -97,6 +98,7 @@ function ayristir(metin) {
   const alanlar = new Set();
   const istisnalar = new Set();
   const kozmetik = new KozmetikDepo();
+  const betik = new BetikDepo();
   const meta = { baslik: '', surum: '', gecerlilikSaat: VARSAYILAN_GECERLILIK_SAAT };
   let toplamKural = 0;
   let atlanan = 0;
@@ -128,9 +130,20 @@ function ayristir(metin) {
      * uygulanmıyordu. Ölçünce çıktı.
      */
     if (satir.includes('##') || satir.includes('#@#') || satir.includes('#?#') || satir.includes('#$#')) {
-      const k = kuralCoz(satir);
-      if (k) { kozmetik.ekle(k); toplamKural++; continue; }
-      // Kozmetik değilse yorum ya da hosts satırı olabilir; aşağıya düşsün.
+      /*
+       * Scriptlet kuralları ("##+js(...)") ayrı motora gidiyor: kozmetik CSS
+       * değil, sayfaya enjekte edilen JS. Kozmetik ayrıştırıcı bunları zaten
+       * reddediyordu; artık kaybolmuyorlar. "+js(" içermeyen kozmetik kurallar
+       * eskisi gibi kuralCoz'a gidiyor.
+       */
+      if (satir.includes('+js(')) {
+        const b = betikCoz(satir);
+        if (b) { betik.ekle(b); toplamKural++; continue; }
+      } else {
+        const k = kuralCoz(satir);
+        if (k) { kozmetik.ekle(k); toplamKural++; continue; }
+      }
+      // Tanınmadıysa yorum ya da hosts satırı olabilir; aşağıya düşsün.
     }
 
     if (satir[0] === '#') {
@@ -178,6 +191,7 @@ function ayristir(metin) {
     alanlar: [...alanlar],
     istisnalar: [...istisnalar],
     kozmetik: kozmetik.disaAktar(),
+    betik: betik.disaAktar(),
     meta,
     toplamKural,
     atlanan
@@ -221,10 +235,11 @@ class ListeYoneticisi {
     this.dizin = path.join(veriDizini, 'listeler');
     this.getir = getir;
     this.degisti = degisti || (() => {});
-    this.kayitlar = new Map();     // id -> { tanim, alanlar:Set, istisnalar:Set, kozmetik, ustBilgi }
+    this.kayitlar = new Map();     // id -> { tanim, alanlar:Set, istisnalar:Set, kozmetik, betik, ustBilgi }
     this.alanlar = new Set();
     this.istisnalar = new Set();
     this.kozmetik = new KozmetikDepo();
+    this.betik = new BetikDepo();
     this._cssOnbellek = new Map();  // host -> hazırlanmış CSS
     this._zamanlayici = null;
     this._ilkZamanlayici = null;
@@ -257,6 +272,7 @@ class ListeYoneticisi {
           alanlar: new Set(k.alanlar || []),
           istisnalar: new Set(k.istisnalar || []),
           kozmetik: KozmetikDepo.iceAktar(k.kozmetik),
+          betik: BetikDepo.iceAktar(k.betik),
           ustBilgi: k.ustBilgi || {}
         });
       } catch {
@@ -270,18 +286,32 @@ class ListeYoneticisi {
     const a = new Set();
     const i = new Set();
     const kz = new KozmetikDepo();
+    // Yerleşik anti-adblock scriptlet'leri her zaman temel oluşturur; listeler
+    // üstüne yığılır. Aynı kural iki kez gelirse eslesenler() tekrarı eliyor.
+    const bt = yerleşikDepo();
     if (this.acik) {
       for (const k of this.kayitlar.values()) {
         for (const h of k.alanlar) a.add(h);
         for (const h of k.istisnalar) i.add(h);
         if (k.kozmetik) kz.birlestir(k.kozmetik);
+        if (k.betik) bt.birlestir(k.betik);
       }
     }
     this.alanlar = a;
     this.istisnalar = i;
     this.kozmetik = kz;
+    this.betik = bt;
     this._cssOnbellek.clear();
     this.degisti();
+  }
+
+  /**
+   * Sayfaya (preload üzerinden) enjekte edilecek scriptlet'lerin derlenmiş
+   * hâli. Engelleyici kapalıysa boş: hiçbir scriptlet çalışmaz.
+   */
+  betikVeri() {
+    if (!this.acik) return { genel: [], alan: {}, istisna: {}, genelIstisna: [] };
+    return this.betik.disaAktar();
   }
 
   /**
@@ -323,7 +353,7 @@ class ListeYoneticisi {
         ozel: !!tanim.ozel,
         // Kozmetik kurallar da sayılıyor: artık uygulanıyorlar, sayıdan
         // düşürmek listeyi olduğundan küçük gösterirdi.
-        kural: k ? k.alanlar.size + (k.kozmetik ? k.kozmetik.sayi : 0) : 0,
+        kural: k ? k.alanlar.size + (k.kozmetik ? k.kozmetik.sayi : 0) + (k.betik ? k.betik.sayı : 0) : 0,
         istisna: k ? k.istisnalar.size : 0,
         indirilme: u.indirilme || 0,
         surum: u.surum || '',
@@ -393,6 +423,7 @@ class ListeYoneticisi {
         alanlar: new Set(c.alanlar),
         istisnalar: new Set(c.istisnalar),
         kozmetik: KozmetikDepo.iceAktar(c.kozmetik),
+        betik: BetikDepo.iceAktar(c.betik),
         ustBilgi: {
           baslik: c.meta.baslik,
           surum: c.meta.surum,
@@ -409,7 +440,7 @@ class ListeYoneticisi {
     } catch (e) {
       // Ağ yoksa ya da liste bozuksa elimizdeki son iyi kopya kullanılmaya devam eder.
       const kayit = mevcut
-        || { tanim, alanlar: new Set(), istisnalar: new Set(), kozmetik: new KozmetikDepo(), ustBilgi: {} };
+        || { tanim, alanlar: new Set(), istisnalar: new Set(), kozmetik: new KozmetikDepo(), betik: new BetikDepo(), ustBilgi: {} };
       kayit.ustBilgi = { ...kayit.ustBilgi, hata: String(e.message || e).slice(0, 200) };
       this.kayitlar.set(tanim.id, kayit);
       return false;
@@ -426,7 +457,8 @@ class ListeYoneticisi {
         ustBilgi: kayit.ustBilgi,
         alanlar: [...kayit.alanlar],
         istisnalar: [...kayit.istisnalar],
-        kozmetik: (kayit.kozmetik || new KozmetikDepo()).disaAktar()
+        kozmetik: (kayit.kozmetik || new KozmetikDepo()).disaAktar(),
+        betik: (kayit.betik || new BetikDepo()).disaAktar()
       }), 'utf8');
       await fsp.rename(gecici, this._dosya(id));
     } catch (e) {

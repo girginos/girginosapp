@@ -10,6 +10,7 @@ const { pathToFileURL } = require('node:url');
 
 const { Store } = require('./src/store');
 const { preloadKaynagi } = require('./src/anti-adblock');
+const { anaDunyaKodu: betikAnaDunyaKodu, yerleşikDepo: betikYerlesikDepo } = require('./src/betikler');
 const { Blocker, kokAlanAdi, hostAl } = require('./src/blocker');
 const { ListeYoneticisi } = require('./src/listeler');
 const { dilCoz, ceviri, bicimle, dilListesi } = require('./src/diller');
@@ -1375,18 +1376,65 @@ function webrtcPolitikasi() {
  * loglanıyor ve uygulama yine de açılıyor - karşı-önlem kritik değil.
  */
 const ANTI_ADBLOCK_ID = 'anti-adblock';
+let _antiAdblockKaynak = null;   // en son yazılan preload metni (gereksiz yeniden kayıt olmasın)
 
+/*
+ * Siteye özel scriptlet demetini üretir. Engelleyici kapalıysa ya da liste
+ * verisi yoksa boş döner (yalnızca genel karşı-önlem yüklenir). İzin listesi
+ * (engelleyicinin elle kapatıldığı siteler) demete gömülüyor: o sitelerde
+ * scriptlet çalışmıyor.
+ */
+function betikKoduUret() {
+  if (!store.ayarlar.engelleyiciAcik) return '';
+  const bos = (v) => !v || !((v.genel && v.genel.length) || (v.alan && Object.keys(v.alan).length));
+
+  let veri = null;
+  if (listeler && listeler.acik) { try { veri = listeler.betikVeri(); } catch { veri = null; } }
+  /*
+   * Listeler henüz yüklenmeden (açılışta ilk gezinme, baslat()'tan önce) ya da
+   * boşsa, yerleşik anti-adblock scriptlet'lerini yine de kur - blackhatworld
+   * gibi kurallar ilk sayfadan itibaren çalışsın. Listeler yüklenince degisti
+   * yeniden üretip üstüne yığıyor.
+   */
+  if (bos(veri)) { try { veri = betikYerlesikDepo().disaAktar(); } catch { return ''; } }
+  if (bos(veri)) return '';
+
+  const izinli = (store.veri.siteIzinleri || []).map((s) => String(s).toLowerCase());
+  try { return betikAnaDunyaKodu(veri, izinli); } catch { return ''; }
+}
+
+/*
+ * Anti-adblock karşı-önlemini + siteye özel scriptlet'leri oturuma bağlar.
+ *
+ * Preload metni çalışma anında diske yazılıyor (kaynağı src/anti-adblock.js +
+ * src/betikler.js; sandbox preload yerel modül require edemediği için gömülü).
+ *
+ * SCRIPTLET'LER DEĞİŞTİKÇE YENİDEN KAYIT. Liste güncellenince, engelleyici
+ * açılıp kapanınca ya da izin listesi değişince demet farklılaşıyor. Dosyayı
+ * yeniden yazıp preload'ı SİLİP yeniden kaydediyoruz; sonraki gezinmeler yeni
+ * demeti alıyor. İçerik aynıysa hiçbir şey yapılmıyor (gereksiz kayıt yok).
+ *
+ * Yazma başarısız olursa (disk) karşı-önlem sessizce devre dışı kalırdı; hata
+ * loglanıyor ve uygulama yine de açılıyor - karşı-önlem kritik değil.
+ */
 function antiAdblockKur() {
   try {
+    const kaynak = preloadKaynagi(betikKoduUret());
+    if (kaynak === _antiAdblockKaynak) return;   // değişmedi
+
     const yol = path.join(app.getPath('userData'), 'anti-adblock-preload.js');
-    fs.writeFileSync(yol, preloadKaynagi(), 'utf8');
-    // registerPreloadScript, setPreloads'ın halefi (setPreloads Electron 44'te
-    // deprecated). Aynı id iki kez kaydedilirse hata verir; oturumKur bir kez
-    // çağrılıyor ama yine de kontrol ediyoruz.
+    fs.writeFileSync(yol, kaynak, 'utf8');
+    _antiAdblockKaynak = kaynak;
+
     if (typeof ses.registerPreloadScript === 'function') {
       const kayitli = (ses.getPreloadScripts ? ses.getPreloadScripts() : [])
         .some((p) => p.id === ANTI_ADBLOCK_ID);
-      if (!kayitli) ses.registerPreloadScript({ type: 'frame', id: ANTI_ADBLOCK_ID, filePath: yol });
+      // Zaten kayıtlıysa önce kaldır: aynı id yeniden kaydedilince hata verir,
+      // ve içerik değiştiği için taze kayıt gerekiyor.
+      if (kayitli && typeof ses.unregisterPreloadScript === 'function') {
+        try { ses.unregisterPreloadScript(ANTI_ADBLOCK_ID); } catch { /* geç */ }
+      }
+      ses.registerPreloadScript({ type: 'frame', id: ANTI_ADBLOCK_ID, filePath: yol });
     } else {
       const mevcut = ses.getPreloads ? ses.getPreloads() : [];
       if (!mevcut.includes(yol)) ses.setPreloads([...mevcut, yol]);
@@ -1490,7 +1538,7 @@ async function oturumKur() {
         sonDegisiklik: y.headers.get('last-modified') || ''
       };
     },
-    degisti: () => { durumGonder(); kozmetigiTazele(); }
+    degisti: () => { durumGonder(); kozmetigiTazele(); antiAdblockKur(); }
   });
   blocker.listeleriBagla(listeler);
 
@@ -2149,6 +2197,8 @@ function ipcKur() {
     }
     const a = store.ayarla(p.anahtar, p.deger);
     if (p.anahtar === 'filtreListeleriAcik' && listeler) listeler.tazele();
+    // Scriptlet demeti engelleyici durumuna ve listeye bağlı; ikisi de tazelenmeli.
+    if (p.anahtar === 'filtreListeleriAcik' || p.anahtar === 'engelleyiciAcik') antiAdblockKur();
     if (p.anahtar === 'tema') temayiUygula();
     if (p.anahtar.startsWith('vekil')) vekiliUygula();
     /*
@@ -2198,6 +2248,8 @@ function ipcKur() {
     const alan = kokAlanAdi(hostAl(s.url));
     if (!alan) return false;
     store.siteIzniDegistir(alan);
+    // İzin listesi scriptlet demetine gömülü; değişince preload'ı tazele.
+    antiAdblockKur();
     if (!s.view.webContents.isDestroyed()) s.view.webContents.reload();
     durumGonder();
     return true;

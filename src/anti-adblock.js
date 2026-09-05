@@ -233,20 +233,31 @@ const ANA_DUNYA_KODU = '(' + anaDunyaKodu.toString() + ')();';
  * OTURUM PAYLAŞILIYOR (arayüz penceresi, katman, newtab); preload yalnızca üst
  * çerçeve http/https sayfalarında çalışır.
  */
-function preloadKaynagi() {
-  return [
+/**
+ * @param {string} [betikKodu]  betikler.anaDunyaKodu(...) çıktısı - siteye özel
+ *   scriptlet demeti. Verilirse anti-adblock kodundan SONRA, yine ana dünyada,
+ *   sayfa script'lerinden önce çalışır. Boşsa yalnızca genel karşı-önlem yüklenir.
+ */
+function preloadKaynagi(betikKodu) {
+  const gövde = [
     "'use strict';",
     "const { webFrame } = require('electron');",
     'try {',
     "  if (window.top === window && /^https?:$/.test(location.protocol)) {",
     '    // false = ana dünya (izole dünya değil).',
-    '    webFrame.executeJavaScript(' + JSON.stringify(ANA_DUNYA_KODU) + ', false);',
+    '    webFrame.executeJavaScript(' + JSON.stringify(ANA_DUNYA_KODU) + ', false);'
+  ];
+  if (betikKodu) {
+    gövde.push('    webFrame.executeJavaScript(' + JSON.stringify(betikKodu) + ', false);');
+  }
+  gövde.push(
     '  }',
     '} catch (e) {',
     "  try { console.debug('anti-adblock preload:', e && e.message); } catch (_) { /* geç */ }",
     '}',
     ''
-  ].join('\n');
+  );
+  return gövde.join('\n');
 }
 
 module.exports = { anaDunyaKodu, ANA_DUNYA_KODU, preloadKaynagi };

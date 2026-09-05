@@ -4,6 +4,7 @@
 const { resolveInput, search, prettyURL, SEARCH_ENGINES } = require('../src/urls');
 const { Blocker, kokAlanAdi, hostAl } = require('../src/blocker');
 const { LISTE } = require('../src/blocklist');
+const betikler = require('../src/betikler');
 
 let gecen = 0;
 const hatalar = [];
@@ -660,6 +661,95 @@ esit('her kayıt geçerli alan adı biçiminde', LISTE.filter(d => !ALAN_BICIMI.
   esit('izin sıfırlama çerez istisnalarını da siler', st.cerezIstisnasiMi('ornek.com'), false);
 
   try { require('node:fs').unlinkSync(yol2); } catch { /* olsun */ }
+}
+
+/* ---- scriptlet (uBO "+js") motoru ---- */
+{
+  const { betikCoz, BetikDepo, imza, kanonik, argümanlarıBöl, anaDunyaKodu } = betikler;
+
+  // Ayrıştırma
+  const k = betikCoz('blackhatworld.com##+js(acs, navigator.userAgent, AdBlockOn)');
+  esit('betikCoz tip', k.tip, 'betik');
+  esit('betikCoz alan', k.alanlar[0], 'blackhatworld.com');
+  esit('betikCoz ad', k.ad, 'acs');
+  esit('betikCoz argüman sayısı', k.argümanlar.length, 2);
+  esit('betikCoz argüman 2', k.argümanlar[1], 'AdBlockOn');
+
+  // Kaçırılmış virgül tek argüman kalır (json-prune/regex için kritik)
+  const bs = String.fromCharCode(92);
+  esit('kaçan virgül tek argüman',
+    JSON.stringify(argümanlarıBöl('set-constant, a' + bs + ', b, true')),
+    JSON.stringify(['set-constant', 'a, b', 'true']));
+
+  // "+js(" içermeyen kozmetik satır bu motora ait değil
+  esit('kozmetik satır betik değil', betikCoz('ornek.com##.reklam'), null);
+  // ABP scriptlet imi (AdGuard) uBO "+js" değil
+  esit('adguard scriptlet imi atlanır', betikCoz('ornek.com#%#//scriptlet("x")'), null);
+
+  // Takma ad kanonikleşir
+  esit('kanonik acs', kanonik('acs'), 'abort-current-script');
+  esit('kanonik nosiif', kanonik('nosiif'), 'no-setInterval-if');
+
+  // Depo eşleşmesi
+  const d = new BetikDepo();
+  d.ekle(betikCoz('blackhatworld.com##+js(acs, navigator.userAgent, AdBlockOn)'));
+  d.ekle(betikCoz('##+js(nowebrtc)'));                    // genel
+  d.ekle(betikCoz('google.*##+js(set-constant, x, true)')); // varlık (TLD serbest)
+  d.ekle(betikCoz('~mobil.site.com,site.com##+js(aopr, y)')); // dışlamalı
+
+  const bhw = d.eslesenler('www.blackhatworld.com').map((e) => e.ad).sort();
+  esit('bhw: acs + genel eşleşir',
+    JSON.stringify(bhw), JSON.stringify(['abort-current-script', 'nowebrtc']));
+  esit('başka site yalnız genel',
+    JSON.stringify(d.eslesenler('ornek.com').map((e) => e.ad)), JSON.stringify(['nowebrtc']));
+  esit('varlık deseni google.de tutar',
+    d.eslesenler('google.de').some((e) => e.ad === 'set-constant'), true);
+  esit('varlık deseni sahte alanı tutmaz',
+    d.eslesenler('google.com.kotu.net').some((e) => e.ad === 'set-constant'), false);
+  esit('dışlama: site.com aopr alır',
+    d.eslesenler('site.com').some((e) => e.ad === 'abort-on-property-read'), true);
+  esit('dışlama: mobil.site.com aopr almaz',
+    d.eslesenler('mobil.site.com').some((e) => e.ad === 'abort-on-property-read'), false);
+
+  // İstisna
+  const di = new BetikDepo();
+  di.ekle(betikCoz('##+js(nowebrtc)'));
+  di.ekle(betikCoz('ornek.com#@#+js(nowebrtc)'));   // o alanda nowebrtc kapalı
+  esit('istisna: ornek.com nowebrtc kapalı', di.eslesenler('ornek.com').length, 0);
+  esit('istisna: başka site etkilenmez', di.eslesenler('baska.com').length, 1);
+
+  // Toplu istisna "#@#+js()" o alanda tüm scriptlet'leri kapatır
+  const dt = new BetikDepo();
+  dt.ekle(betikCoz('##+js(nowebrtc)'));
+  dt.ekle(betikCoz('ornek.com##+js(aopr, z)'));
+  dt.ekle(betikCoz('ornek.com#@#+js()'));
+  esit('toplu istisna: ornek.com hepsi kapalı', dt.eslesenler('ornek.com').length, 0);
+  esit('toplu istisna: başka site açık', dt.eslesenler('baska.com').length, 1);
+
+  // Desteklenmeyen scriptlet sessizce atlanır (depoya girmez)
+  const du = new BetikDepo();
+  du.ekle(betikCoz('##+js(bilinmeyen-scriptlet, x)'));
+  esit('desteklenmeyen scriptlet depoya girmez', du.sayı, 0);
+
+  // Aynı kural iki kez -> tek çalıştırma
+  const dd = new BetikDepo();
+  dd.ekle(betikCoz('##+js(nowebrtc)'));
+  dd.ekle(betikCoz('##+js(nowebrtc)'));
+  esit('aynı scriptlet tekilleşir', dd.eslesenler('ornek.com').length, 1);
+
+  // Kod üretimi geçerli JS ve izin listesi kontrolü içeriyor
+  const kod = anaDunyaKodu(d.disaAktar(), ['izinli.com']);
+  esit('üretilen kod izin listesini gömüyor', kod.includes('izinli.com'), true);
+  let parseOk = true;
+  try { require('node:vm').compileFunction(kod); } catch { parseOk = false; }
+  esit('üretilen kod geçerli JS', parseOk, true);
+
+  // disaAktar / iceAktar tur atışı
+  const geri = BetikDepo.iceAktar(d.disaAktar());
+  esit('iceAktar sayıyı korur', geri.sayı, d.sayı);
+  esit('iceAktar eşleşmeyi korur',
+    JSON.stringify(geri.eslesenler('www.blackhatworld.com').map((e) => e.ad).sort()),
+    JSON.stringify(bhw));
 }
 
 if (hatalar.length) {
