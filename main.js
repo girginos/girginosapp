@@ -22,6 +22,7 @@ const {
   genislikTahmini, olcumdenGenislik, xKonumu, xKonumuSol
 } = require('./src/menu-yerlesim');
 const { SertifikaDeposu } = require('./src/sertifikalar');
+const { uaTemizle, kabulEdilenDiller } = require('./src/kullanici-araci');
 
 // Şema ayrıcalıkları uygulama hazır olmadan bildirilmeli.
 protocol.registerSchemesAsPrivileged([{
@@ -1036,14 +1037,17 @@ const IZIN_TURLERI = [
 
 let izinOnayAcik = false;
 
+function uaVeDilAyarla() {
+  if (!ses) return;
+  ses.setUserAgent(
+    uaTemizle(ses.getUserAgent()),
+    kabulEdilenDiller(ceviri && ceviri.dil, ceviri && ceviri.yerel)
+  );
+}
+
 function oturumKur() {
   ses = session.fromPartition(OTURUM);
-  // Electron varsayılan UA'sı hem "Electron/x" hem uygulama adı belirteci taşır;
-  // ikisi de güçlü bir parmak izi ve saldırgana sürüm bilgisi verir.
-  // Desen uygulama adından kuruluyor: ad değişince burası sessizce bozulmasın.
-  const adDeseni = app.getName().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const belirtec = new RegExp('(?:Electron|' + adDeseni + ')/[0-9.]+\\s*', 'g');
-  ses.setUserAgent(ses.getUserAgent().replace(belirtec, ''));
+  uaVeDilAyarla();
 
   /*
    * Sertifikayı yalnızca İZLİYORUZ: -3 "Chromium'un kendi doğrulama sonucunu
@@ -1655,6 +1659,8 @@ function ipcKur() {
     if (p.anahtar === 'dil') {
       // Dil anında uygulanır: menü yeniden kurulur, arayüz yeni tabloyu alır.
       diliUygula();
+      // Accept-Language arayüz diline bağlı; dil değişince yenilenmeli.
+      uaVeDilAyarla();
       menuKur();
     }
     durumGonder();
