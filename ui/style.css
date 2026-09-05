@@ -201,6 +201,13 @@ svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width:
 #arac.yukleniyor .svg-yenile { display: none; }
 #arac.yukleniyor .svg-dur { display: block; }
 
+/* Genel reklam engelleyici düğmesi: açıkken kesintili engel simgesi (etkin,
+   vurgu rengi), kapalıyken kesikli daire. #btnYenile'nin iki-svg desenini
+   izler. */
+#btnReklamEngel .svg-engel-kapali { display: none; }
+#btnReklamEngel:not(.etkin) .svg-engel-acik { display: none; }
+#btnReklamEngel:not(.etkin) .svg-engel-kapali { display: block; }
+
 #adresKutu {
   position: relative;
   flex: 1;
@@ -344,6 +351,16 @@ svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width:
   box-shadow: 0 10px 26px rgba(0, 0, 0, .16);
 }
 #oneriler[hidden] { display: none; }
+
+/*
+ * Arama önerileri açıkken yer imleri çubuğu gizlenir. Öneri listesi sayfa
+ * katmanının üstüne binemediği için chrome akışında duruyor; altındaki yer
+ * imleri çubuğu da akışta kaldığından ikisi arka arkaya diziliyor ve şerit
+ * sıkışıp bozuk görünüyordu. Chrome'da da öneri açıkken yer imleri çubuğu
+ * kapanır. #oneriler, #yerImleriCubugu'ndan önce geldiği için sonraki-kardeş
+ * seçici bunu JS'siz yapıyor.
+ */
+#oneriler:not([hidden]) ~ #yerImleriCubugu { display: none; }
 
 .oneri {
   display: flex; align-items: center; gap: 10px;
