@@ -48,35 +48,57 @@ function esit(ad, a, b) {
   const imza = (await cek(FEED + '/pusula-guncelleme.json.imza')).toString('utf8').trim();
   console.log('  manifest ' + ham.length + " bayt, imza " + imza.length + ' karakter');
 
+  // Sürümler manifestin kendisinden türetiliyor. Sabit yazılınca bu betik
+  // yalnızca o gün yayında olan sürümde doğru çalışıyor, bir sonraki yayında
+  // gerçek bir sorun yokken üç kontrolü birden düşürüyordu.
+  const yayindaki = JSON.parse(ham.toString('utf8')).surum;
+  // Yamayı körlemesine bir azaltmak yetmiyor: 0.2.0'da yama zaten 0 olduğu
+  // için "eski kurulum" yayındakiyle aynı çıkıyor ve test kendi kendini
+  // çürütüyordu. Sağdan ilk sıfır olmayan bileşeni düşürüyoruz.
+  const birOncekiSurum = (s) => {
+    const p = s.split('.').map(Number);
+    for (let i = p.length - 1; i >= 0; i--) {
+      if (p[i] > 0) {
+        p[i] -= 1;
+        for (let j = i + 1; j < p.length; j++) p[j] = 9;
+        return p.join('.');
+      }
+    }
+    return null;
+  };
+  const eskiSurum = birOncekiSurum(yayindaki);
+  if (!eskiSurum) throw new Error('Yayındaki sürümden daha eskisi türetilemedi: ' + yayindaki);
+  console.log('  yayındaki sürüm = ' + yayindaki + ' · eski kurulum varsayımı = ' + eskiSurum);
+
   console.log('\n2) İmza, uygulamanın içindeki anahtarla doğrulanıyor');
   const sonuc = manifestDogrula({
     ham, imza,
     acikAnahtarlar: anahtarlar.ACIK_ANAHTARLAR,
-    mevcutSurum: '0.0.9',              // eski kurulum: güncelleme görmeli
+    mevcutSurum: eskiSurum,            // eski kurulum: güncelleme görmeli
     kanal: 'kararli',
     platform: 'win32-x64'
   });
   esit('manifest kabul edildi', sonuc.uygun, true);
   if (!sonuc.uygun) console.log('  sebep: ' + sonuc.sebep);
-  esit('bulunan sürüm', sonuc.surum, '0.1.0');
+  esit('bulunan sürüm', sonuc.surum, yayindaki);
 
   console.log('\n3) Aynı sürümdeki kurulum güncelleme görmemeli');
   const ayni = manifestDogrula({
     ham, imza,
     acikAnahtarlar: anahtarlar.ACIK_ANAHTARLAR,
-    mevcutSurum: '0.1.0', kanal: 'kararli', platform: 'win32-x64'
+    mevcutSurum: yayindaki, kanal: 'kararli', platform: 'win32-x64'
   });
   esit('güncelleme yok', ayni.uygun, false);
   esit('sebep = güncel', ayni.sebep, SEBEPLER.GUNCEL);
 
   console.log('\n4) Sunucu ele geçirilmiş gibi: manifest tek bayt değişirse');
   const bozuk = Buffer.from(ham);
-  const i = bozuk.indexOf('0.1.0');
+  const i = bozuk.indexOf(yayindaki);
   bozuk[i + 4] = '9'.charCodeAt(0);   // sürümü 0.1.9 yap
   const sahte = manifestDogrula({
     ham: bozuk, imza,
     acikAnahtarlar: anahtarlar.ACIK_ANAHTARLAR,
-    mevcutSurum: '0.0.9', kanal: 'kararli', platform: 'win32-x64'
+    mevcutSurum: eskiSurum, kanal: 'kararli', platform: 'win32-x64'
   });
   esit('değiştirilmiş manifest reddedildi', sahte.uygun, false);
   esit('sebep = imza', sahte.sebep, SEBEPLER.IMZA);
