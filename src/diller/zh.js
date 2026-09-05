@@ -290,6 +290,15 @@ module.exports = {
     'ayar.temaKoyu': '深色',
     /* --- katman: izin kutusu --- */
     'dialog.izinIstiyor': '请求使用：',
-    'izin.storage-access': '存储访问权限'
+    'izin.storage-access': '存储访问权限',
+    /* --- site izin duvari --- */
+    'panel.siteIzinleri': '网站权限',
+    'izin.siteYok': '此页面没有权限设置。',
+    'izin.durumSor': '询问',
+    'izin.durumIzin': '允许',
+    'izin.durumRet': '阻止',
+    'izin.varsayilanEk': '默认',
+    'izin.siteKarari': '你为此网站设置了该项。',
+    'izin.varsayilanIzleniyor': '正在应用全局默认值。'
   }
 };

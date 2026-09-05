@@ -50,6 +50,8 @@ contextBridge.exposeInMainWorld('pusula', {
   veriTemizle: () => ipcRenderer.invoke('veri:temizle'),
   izinTemizle: () => ipcRenderer.invoke('izin:temizle'),
   izinVarsayilanAyarla: (izin, karar) => ipcRenderer.invoke('izin:varsayilan', { izin, karar }),
+  izinSiteOku: (origin) => ipcRenderer.invoke('izin:site', origin),
+  izinSiteAyarla: (origin, izin, karar) => ipcRenderer.invoke('izin:siteAyarla', { origin, izin, karar }),
   yerImiDegistir: () => ipcRenderer.invoke('yerimi:degistir'),
   yerImiSil: (url) => ipcRenderer.invoke('yerimi:sil', url),
   yerImiGuncelle: (eskiUrl, ad, url) => ipcRenderer.invoke('yerimi:guncelle', { eskiUrl, ad, url }),
@@ -59,6 +61,7 @@ contextBridge.exposeInMainWorld('pusula', {
   indirmeMenu: (konum) => ipcRenderer.send('indirme:menu', konum),
   siteMenu: (konum) => ipcRenderer.send('site:menu', konum),
   yerImiDuzenleDinle: dinle('yerimi-duzenle'),
+  siteIzinleriDinle: dinle('site-izinleri'),
   ayarDegistir: (anahtar, deger) => ipcRenderer.invoke('ayar:degistir', { anahtar, deger }),
   siteEngelleyici: () => ipcRenderer.invoke('site:engelleyici'),
 

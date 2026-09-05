@@ -178,7 +178,10 @@ document.documentElement.dataset.platform = window.pusula.platform;
 
 /* Chrome yüksekliği değişince ana sürece bildir; sayfa görünümü ona göre konumlanır. */
 const yukseklikGozcusu = new ResizeObserver(() => {
-  window.pusula.yukseklikBildir(el.chrome.getBoundingClientRect().height);
+  const y = el.chrome.getBoundingClientRect().height;
+  window.pusula.yukseklikBildir(y);
+  // Panel bu yuksekligin altindan basliyor; tum pencereyi kaplamasin.
+  document.documentElement.style.setProperty('--chrome-y', Math.round(y) + 'px');
 });
 yukseklikGozcusu.observe(el.chrome);
 
@@ -436,6 +439,8 @@ el.yerImleriCubugu.addEventListener('contextmenu', (e) => {
   e.preventDefault();
   window.pusula.yerImiMenu(null);
 });
+
+window.pusula.siteIzinleriDinle((origin) => { siteIzinleriAc(origin); });
 
 window.pusula.yerImiDuzenleDinle((url) => {
   duzenlenenYerImi = url;
@@ -770,7 +775,8 @@ const PANEL_ANAHTARI = {
   gecmis: 'panel.gecmis',
   yerImleri: 'panel.yerImleri',
   indirmeler: 'panel.indirilenler',
-  ayarlar: 'panel.ayarlar'
+  ayarlar: 'panel.ayarlar',
+  siteIzinleri: 'panel.siteIzinleri'
 };
 
 function panelCiz() {
@@ -781,6 +787,70 @@ function panelCiz() {
   else if (acikPanel === 'yerImleri') yerImleriPaneli();
   else if (acikPanel === 'indirmeler') indirmelerPaneli();
   else if (acikPanel === 'ayarlar') ayarlarPaneli();
+  else if (acikPanel === 'siteIzinleri') siteIzinleriPaneli();
+}
+
+/*
+ * Site izin duvarı: TEK bir sitenin bütün izinleri tek ekranda, üç durumlu.
+ * Adres çubuğundaki kilit menüsünden açılıyor. "Sor" kaydı siler, yani site
+ * genel varsayılanı izlemeye döner; hangi varsayılanın geçerli olduğu her
+ * satırda yazıyor ki kullanıcı neyi değiştirdiğini görsün.
+ */
+let siteIzinOrigin = '';
+let siteIzinVeri = null;
+
+async function siteIzinleriPaneli() {
+  el.panelAd.textContent = cev('panel.siteIzinleri');
+
+  const kap = kartYap();
+  el.panelIcerik.appendChild(kap);
+
+  const veri = siteIzinVeri;
+  if (!veri) {
+    const b = document.createElement('div');
+    b.className = 'liste-bos';
+    b.textContent = cev('izin.siteYok');
+    kap.appendChild(b);
+    return;
+  }
+
+  const ust = document.createElement('div');
+  ust.className = 'izin-site-baslik';
+  ust.textContent = veri.origin;
+  kap.appendChild(ust);
+
+  for (const tur of veri.turler) {
+    const kayitli = veri.kayitli[tur];
+    const varsayilan = veri.varsayilan[tur] || 'sor';
+
+    const sec = document.createElement('select');
+    for (const [deger, anahtar] of [
+      ['sor', 'izin.durumSor'], ['izin', 'izin.durumIzin'], ['ret', 'izin.durumRet']
+    ]) {
+      const o = document.createElement('option');
+      o.value = deger;
+      o.textContent = cev(anahtar) +
+        (deger === varsayilan ? ' (' + cev('izin.varsayilanEk') + ')' : '');
+      if ((kayitli || 'sor') === deger) o.selected = true;
+      sec.appendChild(o);
+    }
+    sec.addEventListener('change', async () => {
+      await window.pusula.izinSiteAyarla(veri.origin, tur, sec.value);
+      siteIzinVeri = await window.pusula.izinSiteOku(veri.origin);
+    });
+
+    kap.appendChild(ayarSatiri(
+      cev('izin.' + tur),
+      kayitli ? cev('izin.siteKarari') : cev('izin.varsayilanIzleniyor'),
+      sec
+    ));
+  }
+}
+
+async function siteIzinleriAc(origin) {
+  siteIzinOrigin = origin;
+  siteIzinVeri = await window.pusula.izinSiteOku(origin);
+  panelAc('siteIzinleri');
 }
 
 function satirYap({ baslik, url, zaman, silGeriCagirim }) {
@@ -1012,6 +1082,67 @@ function listeSatiri(l) {
 function dugmeDurum(dugme, gecici, eski, sure = 1500) {
   dugme.textContent = gecici;
   setTimeout(() => { dugme.disabled = false; dugme.textContent = eski; }, sure);
+}
+
+/*
+ * Ayarlar altı bölüme ayrılmış tek bir uzun liste. Bölümleri sekmeye
+ * çeviriyoruz ama bölümlerin kendi kodunu değiştirmiyoruz: çizim bittikten
+ * sonra <h2> başlıklarına göre gruplayıp sarmalıyoruz. Böylece yeni bir
+ * bölüm eklemek yine tek satır (baslik(...)) kalıyor.
+ */
+let aktifAyarSekmesi = 0;
+
+function ayarlariSekmele(g) {
+  const cocuklar = [...g.children];
+  const oncesi = [];
+  const bolumler = [];
+  let simdiki = null;
+
+  for (const c of cocuklar) {
+    if (c.tagName === 'H2') {
+      simdiki = { ad: c.textContent, ogeler: [] };
+      bolumler.push(simdiki);
+    } else if (simdiki) {
+      simdiki.ogeler.push(c);
+    } else {
+      oncesi.push(c);   // istatistik kutuları: her sekmede üstte kalır
+    }
+  }
+  if (bolumler.length < 2) return;
+
+  g.replaceChildren(...oncesi);
+  if (aktifAyarSekmesi >= bolumler.length) aktifAyarSekmesi = 0;
+
+  const serit = document.createElement('nav');
+  serit.className = 'ayar-sekmeler';
+  serit.setAttribute('role', 'tablist');
+  g.appendChild(serit);
+
+  const kutular = bolumler.map((b, i) => {
+    const d = document.createElement('div');
+    d.className = 'ayar-bolum';
+    d.hidden = i !== aktifAyarSekmesi;
+    d.append(...b.ogeler);
+    g.appendChild(d);
+    return d;
+  });
+
+  bolumler.forEach((b, i) => {
+    const dugme = document.createElement('button');
+    dugme.className = 'ayar-sekme' + (i === aktifAyarSekmesi ? ' etkin' : '');
+    dugme.textContent = b.ad;
+    dugme.setAttribute('role', 'tab');
+    dugme.setAttribute('aria-selected', i === aktifAyarSekmesi ? 'true' : 'false');
+    dugme.addEventListener('click', () => {
+      aktifAyarSekmesi = i;
+      kutular.forEach((k, j) => { k.hidden = j !== i; });
+      [...serit.children].forEach((d, j) => {
+        d.classList.toggle('etkin', j === i);
+        d.setAttribute('aria-selected', j === i ? 'true' : 'false');
+      });
+    });
+    serit.appendChild(dugme);
+  });
 }
 
 function ayarlarPaneli() {
@@ -1281,6 +1412,7 @@ function ayarlarPaneli() {
   g.appendChild(ayarSatiri(cev('ayar.yerImleriCubugu'), cev('ayar.yerImleriCubuguAciklama'),
     anahtar(a.yerImleriCubugu, (v) => window.pusula.ayarDegistir('yerImleriCubugu', v))));
 
+  ayarlariSekmele(g);
   el.panelIcerik.appendChild(g);
 }
 

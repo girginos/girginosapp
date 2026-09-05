@@ -290,6 +290,15 @@ module.exports = {
     'ayar.temaKoyu': 'داكن',
     /* --- katman: izin kutusu --- */
     'dialog.izinIstiyor': 'يطلب:',
-    'izin.storage-access': 'الوصول إلى التخزين'
+    'izin.storage-access': 'الوصول إلى التخزين',
+    /* --- site izin duvari --- */
+    'panel.siteIzinleri': 'أذونات الموقع',
+    'izin.siteYok': 'لا توجد أذونات لهذه الصفحة.',
+    'izin.durumSor': 'اسأل',
+    'izin.durumIzin': 'السماح',
+    'izin.durumRet': 'حظر',
+    'izin.varsayilanEk': 'افتراضي',
+    'izin.siteKarari': 'حددته لهذا الموقع.',
+    'izin.varsayilanIzleniyor': 'يُطبَّق الإعداد العام.'
   }
 };

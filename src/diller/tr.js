@@ -303,6 +303,15 @@ module.exports = {
     'ayar.temaKoyu': 'Koyu',
     /* --- katman: izin kutusu --- */
     'dialog.izinIstiyor': 'şunu istiyor:',
-    'izin.storage-access': 'depolama erişimi'
+    'izin.storage-access': 'depolama erişimi',
+    /* --- site izin duvari --- */
+    'panel.siteIzinleri': 'Site izinleri',
+    'izin.siteYok': 'Bu sayfa için izin ayarı yok.',
+    'izin.durumSor': 'Sor',
+    'izin.durumIzin': 'İzin ver',
+    'izin.durumRet': 'Reddet',
+    'izin.varsayilanEk': 'varsayılan',
+    'izin.siteKarari': 'Bu site için siz karar verdiniz.',
+    'izin.varsayilanIzleniyor': 'Genel varsayılan uygulanıyor.'
   }
 };

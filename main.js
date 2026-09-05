@@ -882,7 +882,11 @@ async function siteMenusuGoster(konum) {
       label: cev('site.izinSifirla'),
       click: () => { store.izinSil(u.origin); durumGonder(); }
     },
-    { label: cev('site.ayarlar'), click: () => uiyeGonder('panel-ac', 'ayarlar') }
+    {
+      label: cev('site.ayarlar'),
+      // Genel ayarlar değil, BU sitenin izinleri açılıyor.
+      click: () => uiyeGonder('site-izinleri', u.origin)
+    }
   ];
 
   const menu = Menu.buildFromTemplate(sablon);
@@ -1446,6 +1450,24 @@ function ipcKur() {
   on('indirme:ac', (_e, id) => { indirmeyiAc(id); });
 
   on('dis:ac', (_e, url) => disHarici(url));
+
+  handle('izin:site', (_e, origin) => {
+    if (typeof origin !== 'string' || !/^https?:\/\//.test(origin)) return null;
+    return {
+      origin,
+      turler: IZIN_TURLERI,
+      kayitli: store.izinlerOku(origin),
+      varsayilan: store.ayarlar.izinVarsayilan || {}
+    };
+  });
+
+  handle('izin:siteAyarla', (_e, p) => {
+    if (!p || typeof p.origin !== 'string' || !/^https?:\/\//.test(p.origin)) return false;
+    if (!IZIN_TURLERI.includes(p.izin)) return false;
+    const ok = store.izinAyarla(p.origin, p.izin, p.karar);
+    if (ok) durumGonder();
+    return ok;
+  });
 
   handle('gecmis:listele', (_e, sorgu) => store.gecmisAra(sorgu));
   handle('gecmis:temizle', () => { store.gecmisiTemizle(); return true; });

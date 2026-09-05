@@ -290,6 +290,15 @@ module.exports = {
     'ayar.temaKoyu': 'ダーク',
     /* --- katman: izin kutusu --- */
     'dialog.izinIstiyor': 'が次を要求しています:',
-    'izin.storage-access': 'ストレージへのアクセス'
+    'izin.storage-access': 'ストレージへのアクセス',
+    /* --- site izin duvari --- */
+    'panel.siteIzinleri': 'サイトの権限',
+    'izin.siteYok': 'このページの権限設定はありません。',
+    'izin.durumSor': '確認する',
+    'izin.durumIzin': '許可',
+    'izin.durumRet': 'ブロック',
+    'izin.varsayilanEk': '既定',
+    'izin.siteKarari': 'このサイト用に設定済みです。',
+    'izin.varsayilanIzleniyor': '全体の既定値を適用中です。'
   }
 };

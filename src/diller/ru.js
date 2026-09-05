@@ -290,6 +290,15 @@ module.exports = {
     'ayar.temaKoyu': 'Тёмное',
     /* --- katman: izin kutusu --- */
     'dialog.izinIstiyor': 'запрашивает:',
-    'izin.storage-access': 'доступ к хранилищу'
+    'izin.storage-access': 'доступ к хранилищу',
+    /* --- site izin duvari --- */
+    'panel.siteIzinleri': 'Разрешения сайта',
+    'izin.siteYok': 'Для этой страницы нет разрешений.',
+    'izin.durumSor': 'Спрашивать',
+    'izin.durumIzin': 'Разрешить',
+    'izin.durumRet': 'Блокировать',
+    'izin.varsayilanEk': 'по умолчанию',
+    'izin.siteKarari': 'Вы задали это для сайта.',
+    'izin.varsayilanIzleniyor': 'Применяется общее значение.'
   }
 };
