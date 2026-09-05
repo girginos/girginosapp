@@ -835,3 +835,31 @@ svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width:
   background: var(--vurgu);
   transition: width 200ms linear;
 }
+
+/* Güncelleme bölümündeki ilerleme çubuğu: ayar satırının hemen altında,
+   satırla aynı yatay boşlukla hizalı. */
+.guncelleme-ilerleme {
+  margin: -4px 0 10px;
+  height: 4px;
+}
+.guncelleme-ilerleme[hidden] { display: none; }
+
+/* Belirsiz kip: yüzde bilinmiyorken (denetleme) çizgi gidip gelir. */
+#gncIlerleme[data-durum="kontrol"] > div {
+  width: 32% !important;
+  animation: guncelleme-belirsiz 1.3s ease-in-out infinite;
+}
+@keyframes guncelleme-belirsiz {
+  0%   { margin-left: 0; }
+  50%  { margin-left: 68%; }
+  100% { margin-left: 0; }
+}
+
+/* Tıklanabilir düğmeler imleçle de belli olsun; hepsi cursor:default ile
+   tıklanamaz gibi duruyordu. */
+.dugme:not(:disabled) { cursor: pointer; }
+.dugme:disabled { opacity: .55; }
+
+@media (prefers-reduced-motion: reduce) {
+  #gncIlerleme[data-durum="kontrol"] > div { animation: none; }
+}

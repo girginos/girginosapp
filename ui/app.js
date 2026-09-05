@@ -446,6 +446,7 @@ function ciz() {
   // Geçmiş ve Ayarlar panellerinde girdi alanları var; durum yayını saniyede
   // birkaç kez geldiği için bunları yeniden çizmek kullanıcının yazdığını siler.
   if (acikPanel === 'indirmeler' || acikPanel === 'yerImleri') panelCiz();
+  if (acikPanel === 'ayarlar') guncellemeTazele();
   indirmeGostergesiCiz();
 }
 
@@ -469,6 +470,27 @@ function indirmeGostergesiCiz() {
     el.indirmeler.style.setProperty('--ilerleme', String(Math.round((alinan / toplam) * 100)));
   } else {
     el.indirmeler.style.removeProperty('--ilerleme');
+  }
+}
+
+/*
+ * Güncelleme göstergesini yerinde tazeler. Durum adı değişmediyse yalnızca
+ * yüzde ve metin güncellenir; panel yeniden çizilmez, böylece kullanıcının
+ * ayarlardaki girdilere yazdığı silinmez. Durum adı değiştiyse düğmenin
+ * eylemi de değişmiş demektir, o zaman panel baştan çizilir.
+ */
+function guncellemeTazele() {
+  const cubuk = document.getElementById('gncIlerleme');
+  if (!cubuk) return;
+  const gu = durum.guncelleme || { durum: 'kapali', ilerleme: 0 };
+
+  if (cubuk.dataset.durum !== gu.durum) { panelCiz(); return; }
+
+  if (gu.durum === 'iniyor') {
+    const ic = cubuk.firstElementChild;
+    if (ic) ic.style.width = (gu.ilerleme || 0) + '%';
+    const metin = document.getElementById('gncDurum');
+    if (metin) metin.textContent = cev('guncelleme.iniyor', { n: gu.ilerleme });
   }
 }
 
@@ -1202,7 +1224,28 @@ function ayarlarPaneli() {
     });
   }
 
-  g.appendChild(ayarSatiri(cev('ayar.surum') + ' ' + (gu.surum || ''), gDurum, gDugme));
+  gDugme.id = 'gncDugme';
+  const gSatir = ayarSatiri(cev('ayar.surum') + ' ' + (gu.surum || ''), gDurum, gDugme);
+  // Açıklama metnini yerinde tazeleyebilmek için işaretliyoruz.
+  const gAciklama = gSatir.querySelector('.a-aciklama');
+  if (gAciklama) gAciklama.id = 'gncDurum';
+  g.appendChild(gSatir);
+
+  /*
+   * İlerleme çubuğu. Ayarlar paneli durum yayınında bilerek yeniden
+   * çizilmiyor (girdi alanlarındaki yazı silinmesin diye), bu yüzden çubuğu
+   * guncellemeTazele() yerinde güncelliyor. Yalnızca durum ADI değiştiğinde
+   * panel baştan çiziliyor; yüzde tikleri sırasında çizilmiyor.
+   */
+  const gIlerleme = document.createElement('div');
+  gIlerleme.id = 'gncIlerleme';
+  gIlerleme.className = 'ilerleme guncelleme-ilerleme';
+  gIlerleme.hidden = !(gu.durum === 'iniyor' || gu.durum === 'kontrol' || gu.durum === 'hazir');
+  const gIc = document.createElement('div');
+  gIc.style.width = (gu.durum === 'hazir' ? 100 : (gu.durum === 'iniyor' ? (gu.ilerleme || 0) : 0)) + '%';
+  gIlerleme.appendChild(gIc);
+  gIlerleme.dataset.durum = gu.durum;
+  g.appendChild(gIlerleme);
 
   g.appendChild(ayarSatiri(cev('ayar.guncellemeOtoKontrol'), cev('ayar.guncellemeOtoKontrolAciklama'),
     anahtar(a.guncellemeKontrol !== false, (v) => window.pusula.ayarDegistir('guncellemeKontrol', v))));

@@ -188,3 +188,31 @@ if (hatalar.length) {
   process.exit(1);
 }
 console.log('✓ güncelleme doğrulaması: ' + gecen + ' testin hepsi geçti.');
+
+/* ---- kurulum sessiz mi ---- */
+/*
+ * Sessiz kurulum bir tercih değil, davranışın kendisi: kullanıcı uygulama
+ * içinde onay verdikten sonra ayrıca NSIS sihirbazıyla karşılaşmamalı.
+ * Bu yüzden çağrının biçimi teste bağlanıyor; birisi isSilent'i geri
+ * çevirirse burası düşer.
+ */
+{
+  const { GuncellemeYoneticisi } = require('../src/guncelleme');
+  const cagrilar = [];
+  const y = new GuncellemeYoneticisi({
+    app: { getVersion: () => '0.2.0', isPackaged: true, getLocale: () => 'tr' },
+    oturum: {},
+    degisti: () => {},
+    ayarOku: () => ({})
+  });
+  y.autoUpdater = { quitAndInstall: (sessiz, sonraCalistir) => cagrilar.push([sessiz, sonraCalistir]) };
+
+  y.durum = 'bosta';
+  esit('hazır değilken kurmaz', y.kurVeYenidenBaslat(), false);
+  esit('hazır değilken çağrı yok', cagrilar.length, 0);
+
+  y.durum = 'hazir';
+  esit('hazırken kurar', y.kurVeYenidenBaslat(), true);
+  esit('sessiz kurulum', cagrilar[0][0], true);
+  esit('kurulumdan sonra yeniden açılır', cagrilar[0][1], true);
+}

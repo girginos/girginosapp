@@ -228,8 +228,18 @@ class GuncellemeYoneticisi {
 
   kurVeYenidenBaslat() {
     if (this.durum !== DURUMLAR.HAZIR) return false;
-    // isSilent=false: kurulum penceresi görünsün, kullanıcı ne olduğunu görsün.
-    this.autoUpdater.quitAndInstall(false, true);
+    /*
+     * isSilent=true: kurulum sihirbazı görünmesin.
+     *
+     * Kullanıcı zaten uygulamanın içinde onay verdi; ardından bir de NSIS
+     * penceresinin açılıp beklemesi, güncellemeyi ilk kurulumdan ayırt
+     * edilemez hale getiriyordu. Paket kullanıcı hesabına kuruluyor
+     * (perMachine: false), yani sessiz kurulum yönetici yetkisi istemiyor.
+     *
+     * isForceRunAfter=true: kurulum bitince tarayıcı kendiliğinden geri
+     * açılır; aksi halde kapanır ve bir daha açılmaz.
+     */
+    this.autoUpdater.quitAndInstall(true, true);
     return true;
   }
 

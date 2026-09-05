@@ -44,7 +44,8 @@ const preApi = topla(preload, /^ {2}([A-Za-z][A-Za-z0-9]*):/gm);
 // yerel on()/handle() sarmalayıcılarıyla kaydediliyor.
 const mainOn = new Set([
   ...topla(main, /ipcMain\.on\('([^']+)'/g),
-  ...topla(main, /(?:^|[^.\w])on\('([^']+)'/gm)
+  ...topla(main, /(?:^|[^.\w])on\('([^']+)'/gm),
+  ...topla(main, /katmanOn\('([^']+)'/g)
 ]);
 const mainHandle = new Set([
   ...topla(main, /ipcMain\.handle\('([^']+)'/g),
@@ -64,7 +65,22 @@ const appCagri = topla(app, /window\.pusula\.([A-Za-z0-9]+)/g);
 const appId = topla(app, /\$\('([^']+)'\)/g);
 const htmlId = topla(html, /id="([^"]+)"/g);
 
+/*
+ * Katman ayrı bir WebContentsView; mesajları arayüz penceresinin ana
+ * çerçevesinden gelmez. Arayüz kapısına (on) bağlanan bir 'katman:' kanalı
+ * çalışma anında SESSİZCE düşer - kutu hiç açılmaz ve hata da vermez.
+ * Bu yüzden hangi kanalın hangi kapıda olduğu teste bağlı.
+ */
+const katmanOnKanallar = topla(main, /katmanOn\('([^']+)'/g);
+const duzOnKanallar = topla(main, /(?:^|[^.\w])on\('([^']+)'/gm);
+
 const denetimler = [
+  ['katman kanalı arayüz kapısında (sessizce düşer)',
+    [...duzOnKanallar].filter((k) => k.startsWith('katman:'))],
+  ['katman:* kanalı katmanOn ile kayıtlı değil',
+    [...preSend].filter((k) => k.startsWith('katman:') && !katmanOnKanallar.has(k))],
+  ['katman kapısında katman dışı kanal',
+    [...katmanOnKanallar].filter((k) => !k.startsWith('katman:'))],
   ['preload.send -> main.on', fark(preSend, mainOn)],
   ['preload.invoke -> main.handle', fark(preInvoke, mainHandle)],
   ['main.send -> preload.dinle', fark(mainSend, preDinle)],

@@ -1291,6 +1291,17 @@ function ipcKur() {
   const on = (kanal, fn) => ipcMain.on(kanal, (e, ...a) => { if (arayuzden(e)) fn(e, ...a); });
   const handle = (kanal, fn) => ipcMain.handle(kanal, (e, ...a) => (arayuzden(e) ? fn(e, ...a) : null));
 
+  /*
+   * Katman ayrı bir WebContentsView, yani mesajları arayüz penceresinin ana
+   * çerçevesinden GELMİYOR. arayuzden() ile kontrol edilirse hepsi sessizce
+   * düşer; kutunun boş kalmasının sebebi buydu. Kontrolü gevşetmek yerine
+   * katmanın kendi çerçevesini tanıyan ikinci bir kapı açıyoruz.
+   */
+  const katmandan = (e) =>
+    !!katmanGorunum && !katmanGorunum.webContents.isDestroyed()
+    && !!e.senderFrame && e.senderFrame === katmanGorunum.webContents.mainFrame;
+  const katmanOn = (kanal, fn) => ipcMain.on(kanal, (e, ...a) => { if (katmandan(e)) fn(e, ...a); });
+
   on('ui:hazir', () => durumGonder());
 
   on('ui:yukseklik', (_e, px) => {
@@ -1350,7 +1361,7 @@ function ipcKur() {
     if (k) shell.showItemInFolder(k.yol);
   });
 
-  on('indirme:ac', async (_e, id) => {
+  async function indirmeyiAc(id) {
     const k = indirmeBul(id);
     if (!k) return;
     if (k.calistirilabilir) {
@@ -1366,7 +1377,9 @@ function ipcKur() {
       if (response !== 1) return;
     }
     shell.openPath(k.yol);
-  });
+  }
+
+  on('indirme:ac', (_e, id) => { indirmeyiAc(id); });
 
   on('dis:ac', (_e, url) => disHarici(url));
 
@@ -1447,7 +1460,7 @@ function ipcKur() {
 
   /* ---- açılır kutu katmanı ---- */
 
-  on('katman:hazir', () => {
+  katmanOn('katman:hazir', () => {
     katmanHazirMi = true;
     if (katmanBekleyenIcerik && katmanGorunum) {
       katmanGorunum.webContents.send('katman:icerik', katmanBekleyenIcerik);
@@ -1455,24 +1468,24 @@ function ipcKur() {
     }
   });
 
-  on('katman:kapat', () => katmanGizle());
+  katmanOn('katman:kapat', () => katmanGizle());
 
-  on('katman:indirme-klasor', (_e, id) => {
+  katmanOn('katman:indirme-klasor', (_e, id) => {
     const k = indirmeBul(id);
     if (k) shell.showItemInFolder(k.yol);
   });
 
-  on('katman:indirme-ac', (e, id) => {
+  katmanOn('katman:indirme-ac', (_e, id) => {
     katmanGizle();
-    ipcMain.emit('indirme:ac', e, id);
+    indirmeyiAc(id);
   });
 
-  on('katman:tumunu-goster', () => {
+  katmanOn('katman:tumunu-goster', () => {
     katmanGizle();
     uiyeGonder('panel-ac', 'indirmeler');
   });
 
-  on('katman:izin', (_e, karar) => {
+  katmanOn('katman:izin', (_e, karar) => {
     const coz = katmanIzinKarari;
     katmanIzinKarari = null;
     katmanGizle();
