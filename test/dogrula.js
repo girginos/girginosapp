@@ -284,57 +284,14 @@ esit('her kayıt geçerli alan adı biçiminde', LISTE.filter(d => !ALAN_BICIMI.
   try { require('node:fs').unlinkSync(yol); } catch { /* olsun */ }
 }
 
-/* ---- kullanici araci ve dil basliklari ---- */
+/* ---- kullanici araci ---- */
 /*
- * Buradaki UA dizesi UYDURMA DEGIL: calisan Electron'dan olculdu. Onceki
- * temizlik testi UA'yi elle yazmisti ("Girginos Browser/0.1.0") ve o yuzden
- * gercek bicimi ("GirginosBrowser/1.0.0") hic sinamamisti - test kendi
- * varsayimini dogrulayip gecmisti.
+ * uaTemizle() KALDIRILDI ve testleri de. Dizeden "Electron/x" ile uygulama
+ * adini silmek, tipik gorunmek icin yapiliyordu; olcum tersini soyledi:
+ * dokunulmamis UA ile blackhatworld.com acildi, temizlenmis UA Cloudflare
+ * dogrulama dongusune girdi (iki kosuda da). Gerekce main.js icinde,
+ * oturumKur()'un ustunde yazili.
  */
-{
-  const { uaTemizle } = require('../src/kullanici-araci');
-
-  const OLCULEN =
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) '
-    + 'GirginosBrowser/1.0.0 Chrome/152.0.7977.76 Electron/44.2.0 Safari/537.36';
-
-  const temiz = uaTemizle(OLCULEN);
-  esit('uygulama adi belirteci silindi', /GirginosBrowser/.test(temiz), false);
-  esit('Electron belirteci silindi', /Electron/.test(temiz), false);
-  esit('Chrome surumu duruyor', /Chrome\/152\.0\.7977\.76/.test(temiz), true);
-  esit('Safari belirteci duruyor', /Safari\/537\.36/.test(temiz), true);
-  esit('AppleWebKit duruyor', /AppleWebKit\/537\.36/.test(temiz), true);
-  esit('cift bosluk kalmadi', /  /.test(temiz), false);
-  esit(
-    'sonuc sade bir Chrome UA',
-    temiz,
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) '
-      + 'Chrome/152.0.7977.76 Safari/537.36'
-  );
-
-  // Ad ne olursa olsun calismali: bosluklu, tireli, rakamli.
-  for (const ad of ['GirginosBrowser', 'Girginos-Browser', 'Pusula2', 'Foo_Bar']) {
-    const u = uaTemizle('Mozilla/5.0 AppleWebKit/537.36 ' + ad + '/9.9.9 Chrome/152.0.0.0 Safari/537.36');
-    esit('belirtec silindi: ' + ad, u.includes(ad + '/'), false);
-  }
-
-  // Parantezli bolumler bozulmamali.
-  esit(
-    'parantezli bolum korunur',
-    uaTemizle('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) X/1.0'),
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko)'
-  );
-
-  esit('bos girdi cokmez', uaTemizle(''), '');
-  esit('null girdi cokmez', uaTemizle(null), '');
-
-  /*
-   * Accept-Language testleri KALDIRILDI: baslik degistirilince
-   * navigator.languages onunla birlikte degismiyor ve olusan tutarsizlik,
-   * duzeltmeye calisilan seyden daha guclu bir bot sinyali. Olcum ve gerekce
-   * src/kullanici-araci.js icinde.
-   */
-}
 
 /* ---- Sec-CH-UA basliklari ---- */
 /*

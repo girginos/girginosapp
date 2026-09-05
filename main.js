@@ -22,7 +22,6 @@ const {
   genislikTahmini, olcumdenGenislik, xKonumu, xKonumuSol
 } = require('./src/menu-yerlesim');
 const { SertifikaDeposu } = require('./src/sertifikalar');
-const { uaTemizle } = require('./src/kullanici-araci');
 const { silinecekCerezler, cerezSilmeUrl } = require('./src/cerezler');
 const { ipucuBasliklari } = require('./src/istemci-ipuclari');
 
@@ -1126,11 +1125,32 @@ const IZIN_TURLERI = [
 let izinOnayAcik = false;
 
 /*
- * Accept-Language'a bilerek dokunulmuyor; sebebi src/kullanici-araci.js
- * icindeki olcumde yazili. Kisaca: basligi degistirmek navigator.languages'i
+ * KULLANICI ARACISI DIZESINE DOKUNULMUYOR.
+ *
+ * Bir sure "Electron/x" ve uygulama adi UA'dan siliniyordu; amac tipik bir
+ * Chrome gibi gorunmekti. Olculdu, ters etki yapiyordu:
+ *
+ *   UA'ya dokunulmadan          -> blackhatworld.com acildi (iki kosuda da)
+ *   Electron belirteci silinmis -> Cloudflare dogrulama dongusu (iki kosuda da)
+ *
+ * Sebebi tutarsizlik: "ben Chrome'um" deyip Chrome'un gonderdigi Client
+ * Hints'i gondermemek, bot korumalarinin baktigi en net celiskilerden biri.
+ * Electron kendi adiyla gezerken boyle bir iddia yok.
+ *
+ * Dizede "Chrome/152 ... Safari/537.36" duruyor, yani UA'ya bakan siteler
+ * calismaya devam ediyor; paketlenmis surumde ayrica "GirginosBrowser/x"
+ * geciyor - tarayicinin kendi kimligi.
+ *
+ * UYARI: Cloudflare kararlari IP itibarina bagli. Ayni adrese arka arkaya
+ * onlarca otomatik istek attiktan sonra BUTUN varyantlar takildi; yani
+ * yukaridaki iki kosu sonucu yonlendirici, tek basina kanit degil. Temiz bir
+ * IP'den dogrulanmasi gerekiyor.
+ *
+ * Accept-Language'a da dokunulmuyor: basligi degistirmek navigator.languages'i
  * degistirmiyor ve ikisinin ayrismasi, tek etiketli bir baslıktan cok daha
- * guclu bir bot sinyali uretiyor.
+ * guclu bir bot sinyali uretiyor (bu da olculdu).
  */
+
 /*
  * Sec-CH-UA basliklari sayfanin kendi userAgentData degerlerinden uretiliyor.
  * Degerleri arayuz penceresinden BIR KEZ okuyup onbellege aliyoruz: boylece
@@ -1150,14 +1170,8 @@ async function ipucuBasliklariniOku(wc) {
   } catch { /* okunamadi: baslik eklenmez */ }
 }
 
-function uaAyarla() {
-  if (!ses) return;
-  ses.setUserAgent(uaTemizle(ses.getUserAgent()));
-}
-
 function oturumKur() {
   ses = session.fromPartition(OTURUM);
-  uaAyarla();
 
   /*
    * Sertifikayı yalnızca İZLİYORUZ: -3 "Chromium'un kendi doğrulama sonucunu

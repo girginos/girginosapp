@@ -154,7 +154,24 @@ for (const t of ['ui/app.js', 'ui/katman.js']) {
   }
 }
 
+/*
+ * Kullanici aracisi dizesi ELLE AYARLANMAMALI.
+ *
+ * Bir sure "Electron/x" ve uygulama adi UA'dan siliniyordu. Olculdu:
+ * dokunulmamis UA ile blackhatworld.com acildi, temizlenmis UA Cloudflare
+ * dogrulama dongusune girdi. Kod okunarak fark edilebilecek bir sey degil;
+ * ileride "biraz daha tipik gorunelim" diye geri gelmesi cok kolay.
+ * Gerekce main.js icinde oturumKur()'un ustunde yazili.
+ */
+const uaAyari = [];
+for (const t of ['main.js']) {
+  const kod = oku(t);
+  if (/\.setUserAgent\s*\(/.test(kod)) uaAyari.push(t + ' -> setUserAgent(');
+  if (/userAgentFallback\s*=/.test(kod)) uaAyari.push(t + ' -> app.userAgentFallback =');
+}
+
 const denetimler = [
+  ['kullanici aracisi elle ayarlanmis', uaAyari],
   ['tanimsiz sabit (calisinca ReferenceError)', tanimsizSabitler],
   ['CSS kurali olmayan sinif', kuralsizSiniflar],
   ['sonuç kontrolünden sonra iddia', olusuzIddialar],
