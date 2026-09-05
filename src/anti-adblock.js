@@ -234,21 +234,31 @@ const ANA_DUNYA_KODU = '(' + anaDunyaKodu.toString() + ')();';
  * çerçeve http/https sayfalarında çalışır.
  */
 /**
- * @param {string} [betikKodu]  betikler.anaDunyaKodu(...) çıktısı - siteye özel
- *   scriptlet demeti. Verilirse anti-adblock kodundan SONRA, yine ana dünyada,
- *   sayfa script'lerinden önce çalışır. Boşsa yalnızca genel karşı-önlem yüklenir.
+ * @param {string} [kurulumKodu]  betikler.anaDunyaKurulumKodu() - STATİK kurulum:
+ *   kütüphaneyi + window.__pusulaBetikCalistir'ı sayfaya kurar (kural GÖMMEDEN).
+ *   Verilirse, o host'a ait eşleşmeler ana süreçten sendSync ile alınıp yalnız
+ *   onlar çalıştırılır. Böylece her sayfaya tüm kural kümesi (~590 KB) gömülmüyor.
  */
-function preloadKaynagi(betikKodu) {
+function preloadKaynagi(kurulumKodu) {
   const gövde = [
     "'use strict';",
-    "const { webFrame } = require('electron');",
+    "const { webFrame, ipcRenderer } = require('electron');",
     'try {',
     "  if (window.top === window && /^https?:$/.test(location.protocol)) {",
     '    // false = ana dünya (izole dünya değil).',
     '    webFrame.executeJavaScript(' + JSON.stringify(ANA_DUNYA_KODU) + ', false);'
   ];
-  if (betikKodu) {
-    gövde.push('    webFrame.executeJavaScript(' + JSON.stringify(betikKodu) + ', false);');
+  if (kurulumKodu) {
+    // ÖNCE eşleşmeleri sor; YALNIZCA eşleşme varsa kütüphaneyi kur ve çalıştır.
+    // Böylece scriptlet'i olmayan sayfalar (çoğu) hiç kütüphane parse etmiyor.
+    gövde.push(
+      '    var __m = null;',
+      "    try { __m = ipcRenderer.sendSync('betik:coz', location.hostname); } catch (e) { __m = null; }",
+      '    if (__m && __m.length) {',
+      '      webFrame.executeJavaScript(' + JSON.stringify(kurulumKodu) + ', false);',
+      "      webFrame.executeJavaScript('window.__pusulaBetikCalistir&&window.__pusulaBetikCalistir(' + JSON.stringify(__m) + ')', false);",
+      '    }'
+    );
   }
   gövde.push(
     '  }',

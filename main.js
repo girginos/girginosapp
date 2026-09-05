@@ -10,7 +10,7 @@ const { pathToFileURL } = require('node:url');
 
 const { Store } = require('./src/store');
 const { preloadKaynagi } = require('./src/anti-adblock');
-const { anaDunyaKodu: betikAnaDunyaKodu, yerleşikDepo: betikYerlesikDepo } = require('./src/betikler');
+const { anaDunyaKurulumKodu: betikKurulumKodu, yerleşikDepo: betikYerlesikDepo } = require('./src/betikler');
 const { Blocker, kokAlanAdi, hostAl } = require('./src/blocker');
 const { ListeYoneticisi } = require('./src/listeler');
 const { dilCoz, ceviri, bicimle, dilListesi } = require('./src/diller');
@@ -1412,65 +1412,48 @@ function webrtcPolitikasi() {
  * loglanıyor ve uygulama yine de açılıyor - karşı-önlem kritik değil.
  */
 const ANTI_ADBLOCK_ID = 'anti-adblock';
-let _antiAdblockKaynak = null;   // en son yazılan preload metni (gereksiz yeniden kayıt olmasın)
 
 /*
- * Siteye özel scriptlet demetini üretir. Engelleyici kapalıysa ya da liste
- * verisi yoksa boş döner (yalnızca genel karşı-önlem yüklenir). İzin listesi
- * (engelleyicinin elle kapatıldığı siteler) demete gömülüyor: o sitelerde
- * scriptlet çalışmıyor.
+ * Bir host için çalışacak scriptlet eşleşmeleri. Sekme preload'ı her gezinmede
+ * 'betik:coz' sendSync'iyle burayı çağırıyor; yalnızca O host'a ait küçük liste
+ * dönüyor (~1 KB). Kuralları her sayfaya gömen eski yol ~590 KB'tı ve tarayıcıyı
+ * donduruyordu. Eşleştirme burada, canlı veriyle yapılıyor - preload sabit.
+ *
+ * @returns {[string, string[]][]} [[ad, argümanlar], ...]  (ad kanonik)
  */
-function betikKoduUret() {
-  if (!store.ayarlar.engelleyiciAcik) return '';
-  const bos = (v) => !v || !((v.genel && v.genel.length) || (v.alan && Object.keys(v.alan).length));
-
-  let veri = null;
-  if (listeler && listeler.acik) { try { veri = listeler.betikVeri(); } catch { veri = null; } }
-  /*
-   * Listeler henüz yüklenmeden (açılışta ilk gezinme, baslat()'tan önce) ya da
-   * boşsa, yerleşik anti-adblock scriptlet'lerini yine de kur - blackhatworld
-   * gibi kurallar ilk sayfadan itibaren çalışsın. Listeler yüklenince degisti
-   * yeniden üretip üstüne yığıyor.
-   */
-  if (bos(veri)) { try { veri = betikYerlesikDepo().disaAktar(); } catch { return ''; } }
-  if (bos(veri)) return '';
-
-  const izinli = (store.veri.siteIzinleri || []).map((s) => String(s).toLowerCase());
-  try { return betikAnaDunyaKodu(veri, izinli); } catch { return ''; }
+function betikEslesenler(host) {
+  try {
+    if (!host || !store.ayarlar.engelleyiciAcik) return [];
+    const kok = kokAlanAdi(host);
+    if (kok && store.siteIzinliMi(kok)) return [];   // bu sitede engelleyici kapalı
+    // Listeler hazırsa canlı depo (yerleşik + listeler); değilse yalnız yerleşik.
+    const depo = (listeler && listeler.betik) ? listeler.betik : betikYerlesikDepo();
+    return depo.eslesenler(host).map((e) => [e.ad, e.argümanlar]);
+  } catch (e) {
+    return [];
+  }
 }
 
 /*
- * Anti-adblock karşı-önlemini + siteye özel scriptlet'leri oturuma bağlar.
+ * Anti-adblock karşı-önlemini + scriptlet kurulumunu oturuma bağlar.
  *
- * Preload metni çalışma anında diske yazılıyor (kaynağı src/anti-adblock.js +
- * src/betikler.js; sandbox preload yerel modül require edemediği için gömülü).
- *
- * SCRIPTLET'LER DEĞİŞTİKÇE YENİDEN KAYIT. Liste güncellenince, engelleyici
- * açılıp kapanınca ya da izin listesi değişince demet farklılaşıyor. Dosyayı
- * yeniden yazıp preload'ı SİLİP yeniden kaydediyoruz; sonraki gezinmeler yeni
- * demeti alıyor. İçerik aynıysa hiçbir şey yapılmıyor (gereksiz kayıt yok).
+ * Preload STATİK: yalnızca kütüphaneyi + window.__pusulaBetikCalistir'ı kurar ve
+ * o host'un eşleşmelerini sendSync ile ana süreçten ister. Kural gömmediği için
+ * bir kez yazılıp kaydediliyor; liste/ayar değişince YENİDEN ÜRETİLMESİ GEREKMEZ
+ * (eşleştirme betik:coz handler'ında canlı yapılıyor).
  *
  * Yazma başarısız olursa (disk) karşı-önlem sessizce devre dışı kalırdı; hata
  * loglanıyor ve uygulama yine de açılıyor - karşı-önlem kritik değil.
  */
 function antiAdblockKur() {
   try {
-    const kaynak = preloadKaynagi(betikKoduUret());
-    if (kaynak === _antiAdblockKaynak) return;   // değişmedi
-
     const yol = path.join(app.getPath('userData'), 'anti-adblock-preload.js');
-    fs.writeFileSync(yol, kaynak, 'utf8');
-    _antiAdblockKaynak = kaynak;
+    fs.writeFileSync(yol, preloadKaynagi(betikKurulumKodu()), 'utf8');
 
     if (typeof ses.registerPreloadScript === 'function') {
       const kayitli = (ses.getPreloadScripts ? ses.getPreloadScripts() : [])
         .some((p) => p.id === ANTI_ADBLOCK_ID);
-      // Zaten kayıtlıysa önce kaldır: aynı id yeniden kaydedilince hata verir,
-      // ve içerik değiştiği için taze kayıt gerekiyor.
-      if (kayitli && typeof ses.unregisterPreloadScript === 'function') {
-        try { ses.unregisterPreloadScript(ANTI_ADBLOCK_ID); } catch { /* geç */ }
-      }
-      ses.registerPreloadScript({ type: 'frame', id: ANTI_ADBLOCK_ID, filePath: yol });
+      if (!kayitli) ses.registerPreloadScript({ type: 'frame', id: ANTI_ADBLOCK_ID, filePath: yol });
     } else {
       const mevcut = ses.getPreloads ? ses.getPreloads() : [];
       if (!mevcut.includes(yol)) ses.setPreloads([...mevcut, yol]);
@@ -1920,6 +1903,18 @@ function ipcKur() {
     !!katmanGorunum && !katmanGorunum.webContents.isDestroyed()
     && !!e.senderFrame && e.senderFrame === katmanGorunum.webContents.mainFrame;
   const katmanOn = (kanal, fn) => ipcMain.on(kanal, (e, ...a) => { if (katmandan(e)) fn(e, ...a); });
+
+  /*
+   * SCRIPTLET EŞLEŞTİRME (SENKRON). Sekme preload'ı her gezinmede bu host'un
+   * scriptlet'lerini istiyor. Mesaj SEKME renderer'ından gelir (arayüzden değil),
+   * o yüzden 'on' sarmalayıcısı DEĞİL ham ipcMain.on kullanılıyor. returnValue
+   * HER durumda set edilmeli: aksi halde sendSync sonsuza dek asılır = donma.
+   * Yük küçük (yalnız eşleşen kurallar); sözdizimi güvenli (sadece dizi/dizge).
+   */
+  ipcMain.on('betik:coz', (e, host) => {
+    try { e.returnValue = betikEslesenler(String(host || '')); }
+    catch (_) { e.returnValue = []; }
+  });
 
   // Arayüz (yeniden) bağlanınca değişmeyen veriyi de yolla: çeviri/dil/motor/izin.
   on('ui:hazir', () => durumGonder(true));

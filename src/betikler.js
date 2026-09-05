@@ -939,10 +939,42 @@ function kullanılanAdlar(veri) {
 }
 
 /*
+ * ANA DÜNYA KURULUMU (kural GÖMMEDEN). Kütüphane + H bir kez sayfaya kurulur ve
+ * window.__pusulaBetikCalistir(eslesmeler) tanımlanır. Kurallar burada DEĞİL:
+ * eşleştirme ana süreçte yapılıp yalnızca O host'a ait küçük liste sendSync ile
+ * geliyor. Böylece her sayfaya 4900+ kuralı (~590 KB) gömmüyoruz - o tasarım
+ * çoklu sekmede belleği/CPU'yu boğup tarayıcıyı donduruyordu. Ölçüldü.
+ *
+ * eslesmeler: [[ad, argümanlar], ...] (ad zaten kanonik).
+ */
+function anaDunyaKurulumKodu() {
+  const calistir = function (eslesmeler) {
+    'use strict';
+    if (window.__pusulaBetik) return;
+    window.__pusulaBetik = 1;
+    if (!/^https?:$/.test(location.protocol)) return;
+    if (!eslesmeler || !eslesmeler.length) return;
+    var H = window.__pusulaBetikH();
+    var LIB = kütüphaneMetni;   // yer tutucu; codegen gerçek nesneyle değiştirir
+    for (var i = 0; i < eslesmeler.length; i++) {
+      var ad = eslesmeler[i][0];
+      var args = eslesmeler[i][1] || [];
+      var fn = LIB[ad];
+      if (typeof fn !== 'function') continue;
+      try { fn.apply(null, [H].concat(args)); } catch (e) { /* tek scriptlet çökmesi yayılmasın */ }
+    }
+  };
+  const hKur = 'window.__pusulaBetikH = window.__pusulaBetikH || (' + yardımcıFabrika.toString() + ');';
+  const calistirMetni = calistir.toString()
+    .replace('var LIB = kütüphaneMetni;', 'var LIB = ' + kütüphaneKaynağı() + ';');
+  return hKur + '\nwindow.__pusulaBetikCalistir = ' + calistirMetni + ';';
+}
+
+/*
  * Ana dünyada, gömülü kuralları location.hostname'e göre çözüp çalıştıran demet.
- * Eşleştirme (alanUyar/varlık deseni) burada BAĞIMSIZ olarak yeniden yazılıyor:
- * demet preload'un dışına, sayfanın ana dünyasına geçtiği için hiçbir modüle
- * erişemez. Node tarafındaki kozmetik.alanUyar ile aynı anlamı taşımalı.
+ * (ESKİ YOL - artık preload'da kullanılmıyor; kurallar 590 KB olup her sayfaya
+ * gömülüyordu. Test/gerekirse diye duruyor. Yeni yol: anaDunyaKurulumKodu +
+ * ana süreçte eşleştirme + sendSync.)
  */
 function anaDunyaKodu(disaAktarılmış, izinli) {
   const veri = disaAktarılmış || { genel: [], alan: {}, istisna: {}, genelIstisna: [] };
@@ -1040,6 +1072,7 @@ module.exports = {
   imza,
   kanonik,
   anaDunyaKodu,
+  anaDunyaKurulumKodu,
   yardımcıFabrika,
   KİTAPLIK,
   TAKMA,
