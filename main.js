@@ -393,6 +393,15 @@ function olaylariBagla(t) {
     disHarici(url);
   });
 
+  // Chrome'da F12 geliştirici araçlarını açar. Menüde Ctrl+Shift+I bağlıydı
+  // ama F12 hiçbir şey yapmıyordu; bu tuş sayfaya değil kabuğa ait olmalı.
+  wc.on('before-input-event', (e, girdi) => {
+    if (girdi.type !== 'keyDown' || girdi.key !== 'F12') return;
+    if (girdi.control || girdi.alt || girdi.meta || girdi.shift) return;
+    e.preventDefault();
+    wc.toggleDevTools();
+  });
+
   wc.on('found-in-page', (_e, sonuc) => {
     if (!win || win.isDestroyed()) return;
     win.webContents.send('bulma-sonucu', {
@@ -784,16 +793,12 @@ async function siteMenusuGoster(konum) {
   menu.popup({ window: win, ...menuKonumu(genislik, konum) });
 }
 
+// Sürüm bilgisini bir kutuda göstermek yerine ürün sayfasını açıyoruz; orada
+// sürüm notları, indirme ve güvenlik açıklamaları da bulunuyor.
+const SITE_ADRESI = 'https://girginos.app';
+
 function hakkindaGoster() {
-  dialog.showMessageBox(win, {
-    type: 'info',
-    title: cev('menu.hakkinda'),
-    message: app.getName() + ' ' + app.getVersion(),
-    detail: cev('hakkinda.detay') +
-      '\n\nChromium ' + process.versions.chrome +
-      '\nElectron ' + process.versions.electron +
-      '\nNode ' + process.versions.node
-  });
+  sekmeOlustur({ url: SITE_ADRESI });
 }
 
 function menuKur() {

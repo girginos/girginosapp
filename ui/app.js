@@ -448,6 +448,30 @@ function ciz() {
   // birkaç kez geldiği için bunları yeniden çizmek kullanıcının yazdığını siler.
   if (acikPanel === 'indirmeler' || acikPanel === 'yerImleri') panelCiz();
   indirmeMenusuCiz();   // indirme ilerlemesi canlı görünsün
+  indirmeGostergesiCiz();
+}
+
+/*
+ * Araç çubuğundaki indirme düğmesi, panel kapalıyken de indirmenin sürdüğünü
+ * göstersin: ok canlanır ve düğmenin altında toplam ilerleme çizgisi belirir.
+ * Boyutu bilinmeyen indirmelerde yüzde hesaplanamaz; o durumda yalnızca
+ * animasyon kalır, çizgi belirsiz kipte akar.
+ */
+function indirmeGostergesiCiz() {
+  const suren = (durum.indirmeler || []).filter((i) => i.durum === 'devam');
+  el.indirmeler.classList.toggle('iniyor', suren.length > 0);
+
+  const olculebilir = suren.filter((i) => i.toplam > 0);
+  const belirsiz = suren.length > 0 && olculebilir.length === 0;
+  el.indirmeler.classList.toggle('belirsiz', belirsiz);
+
+  if (olculebilir.length) {
+    const alinan = olculebilir.reduce((t, i) => t + i.alinan, 0);
+    const toplam = olculebilir.reduce((t, i) => t + i.toplam, 0);
+    el.indirmeler.style.setProperty('--ilerleme', String(Math.round((alinan / toplam) * 100)));
+  } else {
+    el.indirmeler.style.removeProperty('--ilerleme');
+  }
 }
 
 /* ---------------- adres çubuğu ve öneriler ---------------- */

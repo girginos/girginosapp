@@ -212,9 +212,20 @@ svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width:
   box-shadow: 0 0 0 3px var(--vurgu-yumusak);
 }
 
-#adres {
+/* Girdi ve adres katmanının ortak kutusu. Katman buna göre konumlanıyor,
+   yani soldaki kalkan/kilit düğmelerinin genişliği artık önemli değil. */
+#adresAlan {
+  position: relative;
   flex: 1;
   min-width: 40px;
+  display: flex;
+  align-items: center;
+  height: 100%;
+}
+
+#adres {
+  flex: 1;
+  min-width: 0;
   border: 0;
   background: transparent;
   color: var(--metin);
@@ -721,13 +732,14 @@ svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width:
   left: 0; right: 0;
   top: 50%;
   transform: translateY(-50%);
-  padding: 0 34px 0 62px;
   font-size: 13px;
   line-height: 1.3;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  pointer-events: auto;
+  /* Katman kalkan ve kilit düğmelerinin üstünde durursa tıklamalarını yutar;
+     site bilgisi menüsünün açılmamasının sebebi buydu. */
+  pointer-events: none;
   background: transparent;
 }
 #adresGoster[hidden] { display: none; }
@@ -760,4 +772,56 @@ svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width:
   font-size: 12px;
   outline: none;
   user-select: text;
+}
+
+/* ---------- İndirme göstergesi ---------- */
+/* Panel kapalıyken de indirmenin sürdüğü belli olsun. */
+
+#btnIndirmeler { position: relative; }
+
+#btnIndirmeler.iniyor { color: var(--vurgu); }
+#btnIndirmeler.iniyor svg { animation: indirme-ok 1.4s ease-in-out infinite; }
+
+@keyframes indirme-ok {
+  0%, 100% { transform: translateY(-1px); }
+  50%      { transform: translateY(2px); }
+}
+
+/* Düğmenin altındaki ince ilerleme çizgisi. */
+#btnIndirmeler.iniyor::after {
+  content: "";
+  position: absolute;
+  left: 5px; right: 5px; bottom: 3px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--vurgu-yumusak);
+}
+#btnIndirmeler.iniyor::before {
+  content: "";
+  position: absolute;
+  left: 5px; bottom: 3px;
+  /* --ilerleme birimsiz gelir (0-100); yüzdeye bölmek geçerli calc değil. */
+  width: calc((100% - 10px) * var(--ilerleme, 0) / 100);
+  height: 2px;
+  border-radius: 1px;
+  background: var(--vurgu);
+  z-index: 1;
+  transition: width 200ms linear;
+}
+
+/* Boyut bilinmiyorsa yüzde hesaplanamaz; çizgi belirsiz kipte gidip gelir. */
+#btnIndirmeler.belirsiz::before {
+  width: 35%;
+  transition: none;
+  animation: indirme-belirsiz 1.3s ease-in-out infinite;
+}
+@keyframes indirme-belirsiz {
+  0%   { left: 5px; }
+  50%  { left: calc(100% - 5px - 35%); }
+  100% { left: 5px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #btnIndirmeler.iniyor svg,
+  #btnIndirmeler.belirsiz::before { animation: none; }
 }
