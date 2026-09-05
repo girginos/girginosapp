@@ -370,7 +370,15 @@ function yerlesimGuncelle() {
   if (!win || win.isDestroyed()) return;
   const { width, height } = win.getContentBounds();
   if (katmanAcikMi()) katmanGorunum.setBounds({ x: 0, y: 0, width, height });
-  const y = panelAcik ? height : chromeYukseklik;
+  /*
+   * HTML tam ekran (video oynatıcının tam ekran düğmesi): aktif sayfa TÜM
+   * pencereyi kaplamalı, chrome'un üstüne binmeli. Bu olmadan yerlesimGuncelle
+   * sayfayı her zaman chrome'un altında bıraktığı için video "tam ekran"
+   * denince bile araç çubuğu görünür kalıyor ve video büyümüyordu.
+   */
+  const a = aktifSekme();
+  const htmlTam = !!(a && a.tamEkran);
+  const y = htmlTam ? 0 : (panelAcik ? height : chromeYukseklik);
   for (const t of sekmeler.values()) {
     if (t.view.webContents.isDestroyed()) continue;
     t.view.setBounds({ x: 0, y, width, height: Math.max(0, height - y) });
@@ -624,11 +632,16 @@ function olaylariBagla(t) {
    */
   wc.on('enter-html-full-screen', () => {
     t.tamEkran = true;
-    yerlesimGuncelle();     // sınırları yeniden dayat
+    // Pencereyi de OS tam ekrana al: video gerçekten tüm ekranı kaplasın
+    // (görev çubuğu dahil). setFullScreen enter-full-screen'i tetikleyip
+    // yerlesimGuncelle çağırıyor; yine de doğrudan dayatıyoruz.
+    if (win && !win.isFullScreen()) win.setFullScreen(true);
+    yerlesimGuncelle();
     durumGonder();
   });
   wc.on('leave-html-full-screen', () => {
     t.tamEkran = false;
+    if (win && win.isFullScreen()) win.setFullScreen(false);
     yerlesimGuncelle();
     durumGonder();
   });
@@ -1722,7 +1735,21 @@ function pencereOlustur() {
   win.once('ready-to-show', () => win.show());
   win.on('resize', yerlesimGuncelle);
   win.on('enter-full-screen', yerlesimGuncelle);
-  win.on('leave-full-screen', yerlesimGuncelle);
+  win.on('leave-full-screen', () => {
+    /*
+     * Kullanıcı OS tam ekrandan (ESC ya da pencere düğmesi) çıktıysa ama aktif
+     * sayfa hâlâ HTML tam ekrandaysa, sayfayı da çıkar - yoksa video oynatıcı
+     * "tam ekran" sanmaya devam eder ve araç çubuğu üstüne binmiş görünür.
+     * leave-html-full-screen yoluyla gelindiyse tamEkran zaten false, döngü yok.
+     */
+    const a = aktifSekme();
+    if (a && a.tamEkran && !a.view.webContents.isDestroyed()) {
+      a.view.webContents.executeJavaScript(
+        'document.exitFullscreen && document.exitFullscreen()', true
+      ).catch(() => { /* zaten çıkmış olabilir */ });
+    }
+    yerlesimGuncelle();
+  });
   win.on('closed', () => {
     // Sekmeler pencereyle birlikte yok edilmezse renderer süreçleri ayakta kalır.
     for (const t of sekmeler.values()) {
