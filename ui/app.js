@@ -115,7 +115,7 @@ function alanAdi(url) {
 
 // Favicon'a güvenmek yerine alan adından tutarlı bir harf/renk üretiyoruz:
 // listeler favicon indirilmesini beklemeden dolu görünüyor.
-const ROZET_RENKLERI = ['#c62d42', '#0f766e', '#2563eb', '#b45309', '#7c3aed', '#be185d', '#15803d', '#0891b2'];
+const ROZET_RENKLERI = ['#2867ff', '#0f766e', '#2563eb', '#b45309', '#7c3aed', '#be185d', '#15803d', '#0891b2'];
 
 function rozetYap(url) {
   const host = alanAdi(url);

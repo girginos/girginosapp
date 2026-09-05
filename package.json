@@ -51,7 +51,8 @@
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,
-      "deleteAppDataOnUninstall": false
+      "deleteAppDataOnUninstall": false,
+      "uninstallerIcon": "yapi-kaynaklari/icon.ico"
     },
     "mac": {
       "target": [

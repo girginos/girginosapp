@@ -5,8 +5,8 @@
   --metin: #1c1f26;
   --metin2: #626a78;
   --cizgi: #d3d8e0;
-  --vurgu: #c62d42;
-  --vurgu-yumusak: rgba(198, 45, 66, .12);
+  --vurgu: #2867ff;
+  --vurgu-yumusak: rgba(40, 103, 255, .12);
   --sekme-aktif: #ffffff;
   --sekme-pasif: #e4e8ee;
   --sekme-pasif-uzeri: #f2f4f7;
@@ -23,8 +23,8 @@
     --metin: #e8eaee;
     --metin2: #9aa2b1;
     --cizgi: #333844;
-    --vurgu: #ff6b80;
-    --vurgu-yumusak: rgba(255, 107, 128, .16);
+    --vurgu: #4d8dff;
+    --vurgu-yumusak: rgba(77, 141, 255, .18);
     --sekme-aktif: #2a2e37;
     --sekme-pasif: #1b1e25;
     --sekme-pasif-uzeri: #232730;

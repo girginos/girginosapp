@@ -54,7 +54,7 @@ document.getElementById('aramaFormu').addEventListener('submit', (e) => {
 
 /* ---- ortak ---- */
 
-const ROZET_RENKLERI = ['#c62d42', '#0f766e', '#2563eb', '#b45309', '#7c3aed', '#be185d', '#15803d', '#0891b2'];
+const ROZET_RENKLERI = ['#2867ff', '#0f766e', '#2563eb', '#b45309', '#7c3aed', '#be185d', '#15803d', '#0891b2'];
 
 function alanAdi(url) {
   try { return new URL(url).hostname.replace(/^www\./, ''); } catch { return ''; }
