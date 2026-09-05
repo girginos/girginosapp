@@ -586,13 +586,28 @@ class BetikDepo {
  * göre eşleşen scriptlet'leri çalıştırıyor.
  * ========================================================================= */
 
-// Bir kütüphane fonksiyonunu "  'ad': <kaynak>" satırına çevirir.
-function kütüphaneKaynağı() {
+/*
+ * Yalnızca KULLANILAN scriptlet fonksiyonlarını gömer. Her sayfaya 11 fonksiyonu
+ * (~14 KB) enjekte edip ayrıştırmak boşuna: kurallarda hangi scriptlet varsa
+ * yalnızca onu koyuyoruz. blackhatworld gibi tek kurallı durumda demet küçülür,
+ * sayfa açılışı hafifler.
+ */
+function kütüphaneKaynağı(kullanılanlar) {
   const satırlar = [];
   for (const ad of Object.keys(KİTAPLIK)) {
+    if (kullanılanlar && !kullanılanlar.has(ad)) continue;
     satırlar.push('  ' + JSON.stringify(ad) + ': ' + KİTAPLIK[ad].toString());
   }
   return '{\n' + satırlar.join(',\n') + '\n}';
+}
+
+// Derlenmiş depoda gerçekten geçen kanonik scriptlet adları.
+function kullanılanAdlar(veri) {
+  const küme = new Set();
+  const topla = (liste) => { for (const k of (liste || [])) küme.add(kanonik(k[0])); };
+  topla(veri.genel);
+  for (const liste of Object.values(veri.alan || {})) topla(liste);
+  return küme;
 }
 
 /*
@@ -666,8 +681,8 @@ function anaDunyaKodu(disaAktarılmış, izinli) {
   // H fabrikasını ana dünyaya bir kez kur, sonra gövdeyi çalıştır.
   const hKur = 'window.__pusulaBetikH = window.__pusulaBetikH || (' + yardımcıFabrika.toString() + ');';
   const gövdeMetni = gövde.toString()
-    // "var LIB = kütüphaneMetni;" satırını gerçek kütüphane nesnesiyle değiştir.
-    .replace('var LIB = kütüphaneMetni;', 'var LIB = ' + kütüphaneKaynağı() + ';');
+    // "var LIB = kütüphaneMetni;" satırını YALNIZCA kullanılan fonksiyonlarla değiştir.
+    .replace('var LIB = kütüphaneMetni;', 'var LIB = ' + kütüphaneKaynağı(kullanılanAdlar(veri)) + ';');
 
   return hKur + '\n('
     + gövdeMetni

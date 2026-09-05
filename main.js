@@ -223,28 +223,54 @@ function sekmeSerilestir(t) {
   };
 }
 
-function durumGonder() {
+/*
+ * DEĞİŞMEYEN VERİ HER DURUMDA GÖNDERİLMİYOR.
+ *
+ * durum yayını saniyede birkaç kez akıyor (her gezinme adımı, favicon, başlık,
+ * engellenen sayacı, sekme geçişi). Ölçüldü: tek mesaj ~23 KB ve bunun ~15 KB'ı
+ * ceviri + dil/motor/izin listeleri - HİÇ değişmeyen (yalnızca dil seçilince)
+ * veri. Her olayda bu bloğu serileştirip IPC'den geçirmek boşuna CPU ve çöp.
+ * Artık yalnızca arayüz hazır olduğunda ve dil değişince gönderiliyor; arayüz
+ * gelen durumu öncekinin ÜSTÜNE birleştirdiği için atlanan alanlar korunuyor.
+ */
+let _sonYerImiSurum = -1;      // en son gönderilen yer imi sürümü
+let _yerImiFaviconKirli = true; // favicon değişince yer imi şeridi tazelensin
+
+function durumGonder(statikDe = false) {
   if (!win || win.isDestroyed()) return;
-  win.webContents.send('durum', {
+  const veri = {
     sekmeler: [...sekmeler.values()].map(sekmeSerilestir),
     aktifId,
     ayarlar: store.ayarlar,
-    motorlar: SEARCH_ENGINES,
-    izinTurleri: IZIN_TURLERI,
     listeler: listeler ? listeler.durum() : [],
-    ceviri: ceviriler,
-    diller: dilListesi(),
-    yerImleri: store.veri.yerImleri.slice(0, 100).map((y) => ({
-      ...y,
-      favicon: faviconlar ? faviconlar.adres(hostAl(y.url)) : ''
-    })),
     toplamEngellenen: store.veri.istatistik.engellenen,
     indirmeler: indirmeler.slice(0, 30),
     guncelleme: guncelleme ? guncelleme.bilgi() : null,
     // Chromium vekil kuralini reddettiyse arayuz bunu soylemeli; sessizce
     // dogrudan baglanmak kullaniciyi korundugu sanisinda birakir.
     vekilReddedildi
-  });
+  };
+  /*
+   * Yer imleri (favicon'larıyla ~6 KB) yalnızca DEĞİŞTİĞİNDE gönderiliyor: yer
+   * imi eklenip çıkınca (sürüm) ya da bir favicon gelince (şerit simgesi). Sayfa
+   * geçişi/yükleme gibi olaylarda tekrar tekrar yollanmıyor. İlk/statik
+   * gönderimde her zaman var - arayüz yeni bağlanmış olabilir.
+   */
+  if (statikDe || _yerImiFaviconKirli || store.yerImiSurum !== _sonYerImiSurum) {
+    veri.yerImleri = store.veri.yerImleri.slice(0, 100).map((y) => ({
+      ...y,
+      favicon: faviconlar ? faviconlar.adres(hostAl(y.url)) : ''
+    }));
+    _sonYerImiSurum = store.yerImiSurum;
+    _yerImiFaviconKirli = false;
+  }
+  if (statikDe) {
+    veri.ceviri = ceviriler;
+    veri.diller = dilListesi();
+    veri.motorlar = SEARCH_ENGINES;
+    veri.izinTurleri = IZIN_TURLERI;
+  }
+  win.webContents.send('durum', veri);
 }
 
 /*
@@ -451,13 +477,23 @@ function sekmeOlustur({ url, arkaPlan = false, kaynak = 'kullanici' } = {}) {
 function sekmeSec(id) {
   const t = sekmeler.get(id);
   if (!t) return;
+  const gorunur = !panelAcik;
+  /*
+   * ÖNCE GELEN SEKMEYİ GÖSTER, SONRA ÖTEKİLERİ GİZLE. Tersini yapınca (eskiyi
+   * gizle, sonra yeniyi göster) aradaki karede hiçbir görünüm görünmez kalıp
+   * pencere arka planı sızıyor - beyaz/boş bir parlama. Sırayı çevirince geçiş
+   * daha akıcı görünüyor.
+   */
+  if (gorunur && !t.view.webContents.isDestroyed()) t.view.setVisible(true);
   for (const [tid, tab] of sekmeler) {
-    if (!tab.view.webContents.isDestroyed()) tab.view.setVisible(tid === id && !panelAcik);
+    if (tid === id) continue;
+    if (!tab.view.webContents.isDestroyed()) tab.view.setVisible(false);
   }
+  if (!gorunur && !t.view.webContents.isDestroyed()) t.view.setVisible(false);
   aktifId = id;
   yerlesimGuncelle();
   // Panel açıkken odağı görünmez sayfaya vermek panelde yazmayı öldürüyordu.
-  if (!panelAcik && !t.view.webContents.isDestroyed()) t.view.webContents.focus();
+  if (gorunur && !t.view.webContents.isDestroyed()) t.view.webContents.focus();
   durumGonder();
 }
 
@@ -1545,7 +1581,9 @@ async function oturumKur() {
   faviconlar = new FaviconDeposu({
     veriDizini: app.getPath('userData'),
     oturum: ses,
-    degisti: durumGonder
+    // Favicon gelince yer imi şeridinin simgesi de tazelensin: yer imleri
+    // yalnızca değişince gönderildiği için bu bayrak olmadan simge güncellenmezdi.
+    degisti: () => { _yerImiFaviconKirli = true; durumGonder(); }
   });
   faviconlar.protokoluBagla();
 
@@ -1883,7 +1921,8 @@ function ipcKur() {
     && !!e.senderFrame && e.senderFrame === katmanGorunum.webContents.mainFrame;
   const katmanOn = (kanal, fn) => ipcMain.on(kanal, (e, ...a) => { if (katmandan(e)) fn(e, ...a); });
 
-  on('ui:hazir', () => durumGonder());
+  // Arayüz (yeniden) bağlanınca değişmeyen veriyi de yolla: çeviri/dil/motor/izin.
+  on('ui:hazir', () => durumGonder(true));
 
   on('ui:yukseklik', (_e, px) => {
     if (!Number.isFinite(px)) return;
@@ -2216,7 +2255,8 @@ function ipcKur() {
       diliUygula();
       menuKur();
     }
-    durumGonder();
+    // Dil değişince değişmeyen veri (çeviri tablosu) yeniden gönderilmeli.
+    durumGonder(p.anahtar === 'dil');
     return a;
   });
 

@@ -30,6 +30,16 @@ let durum = {
 // Çeviri tablosu ana süreçten 'durum' ile geliyor.
 let ceviri = { dil: 'tr', yon: 'ltr', yerel: 'tr-TR', metin: {} };
 
+/*
+ * Yer imi şeridi yalnızca yer imleri değiştiğinde yeniden kuruluyor. Ana süreç
+ * yerImleri'ni yalnızca değişince gönderdiği (durum yükü küçük) ve şeridi her
+ * durumda 40 düğme + yüzlerce dinleyiciyle yeniden kurmak boşa CPU olduğu için:
+ * yerImYeni gelen durumda yerImleri varsa true olur, yerImCizildi şeridin o an
+ * çizili olup olmadığını tutar (gizlenince sıfırlanır ki tekrar görününce çizilsin).
+ */
+let yerImYeni = true;
+let yerImCizildi = false;
+
 function cev(anahtar, degerler) {
   const kalip = ceviri.metin[anahtar] || anahtar;
   if (!degerler) return kalip;
@@ -370,11 +380,16 @@ function yerImiEtiketi(y) {
 function yerImleriCiz() {
   const goster = !!durum.ayarlar.yerImleriCubugu;
   el.yerImleriCubugu.hidden = !goster;
-  if (!goster) return;
+  if (!goster) { yerImCizildi = false; return; }   // gizli: tekrar görününce çizilsin
 
   // Ad düzenlenirken çubuğu yeniden çizmek girdiyi ve yazılanı siler;
   // durum yayını saniyede birkaç kez geliyor.
   if (duzenlenenYerImi && el.yerImleriCubugu.querySelector('.yerimi-duzenle')) return;
+
+  // Yer imleri değişmedi ve şerit zaten çizili: pahalı yeniden kurmayı atla.
+  if (yerImCizildi && !yerImYeni) return;
+  yerImYeni = false;
+  yerImCizildi = true;
 
   el.yerImleriCubugu.replaceChildren();
   if (!durum.yerImleri.length) {
@@ -1570,7 +1585,15 @@ function ayarlarPaneli() {
 let ilkDurumGeldi = false;
 
 window.pusula.durumDinle((d) => {
-  durum = d;
+  /*
+   * BİRLEŞTİR, DEĞİŞTİRME. Ana süreç değişmeyen veriyi (çeviri, dil/motor/izin
+   * listeleri) her durumda göndermiyor - yalnızca bağlanışta ve dil değişince.
+   * Gelen durumu öncekinin üstüne yığıyoruz ki atlanan alanlar (ör. motorlar,
+   * yerImleri) son bilinen değerinde kalsın.
+   */
+  durum = Object.assign(durum, d);
+  // yerImleri yalnızca değiştiğinde geliyor; geldiyse şerit yeniden çizilsin.
+  if (d.yerImleri) yerImYeni = true;
   if (d.ceviri) {
     const dilDegisti = d.ceviri.dil !== ceviri.dil;
     ceviri = d.ceviri;

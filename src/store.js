@@ -211,6 +211,14 @@ class Store {
     this.hemenKaydet();
   }
 
+  /*
+   * Yer imi listesi her değiştiğinde artan sürüm. durum yayını yer imlerini
+   * (favicon'larıyla ~6 KB) yalnızca bu sürüm değişince gönderiyor; sayfa
+   * geçişi/yükleme gibi olaylarda boşuna tekrar tekrar yollamıyor.
+   */
+  get yerImiSurum() { return this._yerImiSurum || 0; }
+  _yerImiDegisti() { this._yerImiSurum = (this._yerImiSurum || 0) + 1; }
+
   yerImiVarMi(url) {
     return this.veri.yerImleri.some(y => y.url === url);
   }
@@ -219,13 +227,14 @@ class Store {
     const i = this.veri.yerImleri.findIndex(y => y.url === url);
     if (i >= 0) this.veri.yerImleri.splice(i, 1);
     else this.veri.yerImleri.unshift({ url, baslik: baslik || url, zaman: Date.now() });
+    this._yerImiDegisti();
     this.kaydet();
     return i < 0;
   }
 
   yerImiSil(url) {
     const i = this.veri.yerImleri.findIndex(y => y.url === url);
-    if (i >= 0) { this.veri.yerImleri.splice(i, 1); this.kaydet(); }
+    if (i >= 0) { this.veri.yerImleri.splice(i, 1); this._yerImiDegisti(); this.kaydet(); }
   }
 
   // Yer iminin adını ve/veya adresini değiştirir.
@@ -238,6 +247,7 @@ class Store {
       if (url !== eskiUrl && this.veri.yerImleri.some(k => k.url === url)) return false;
       y.url = url;
     }
+    this._yerImiDegisti();
     this.kaydet();
     return true;
   }
@@ -251,6 +261,7 @@ class Store {
       const y = konum.has(b.url) ? konum.get(b.url) : Number.MAX_SAFE_INTEGER;
       return x - y;
     });
+    this._yerImiDegisti();
     this.kaydet();
     return true;
   }
