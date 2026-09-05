@@ -11,6 +11,7 @@ const el = {
   adresKutu: $('adresKutu'), adres: $('adres'), adresGoster: $('adresGoster'), kilit: $('kilit'),
   kalkan: $('btnKalkan'), engelSayi: $('engelSayi'), yerImi: $('btnYerImi'),
   reklamEngel: $('btnReklamEngel'),
+  sayfaGoruntu: $('sayfaGoruntu'),
   gecmis: $('btnGecmis'), indirmeler: $('btnIndirmeler'),
   onbellek: $('btnOnbellek'), ayarlar: $('btnAyarlar'),
   yerImleriCubugu: $('yerImleriCubugu'),
@@ -603,6 +604,27 @@ function onerileriCiz() {
   });
   el.oneriler.hidden = oneriListesi.length === 0;
   oneriSecimiCiz();
+  oneriGorunurlukGuncelle();
+}
+
+/*
+ * Öneri açık/kapandığında main'e haber ver: sayfa görünümü gizlenip anlık
+ * görüntüsü #sayfaGoruntu'ya konsun, böylece liste sayfayı aşağı itmek yerine
+ * üstüne binsin. Yalnızca DURUM DEĞİŞİMİNDE tetikleniyor (her tuş vuruşunda
+ * değil), yoksa her harfte capturePage çağrılırdı.
+ */
+let oneriAcikDurum = false;
+function oneriGorunurlukGuncelle() {
+  const acik = !el.oneriler.hidden;
+  if (acik === oneriAcikDurum) return;
+  oneriAcikDurum = acik;
+  if (acik) {
+    window.pusula.oneriDurum(true);
+  } else {
+    window.pusula.oneriDurum(false);
+    el.sayfaGoruntu.hidden = true;
+    el.sayfaGoruntu.style.backgroundImage = '';
+  }
 }
 
 // Ok tuşlarında bütün listeyi yeniden kurmuyoruz: satırlar yeniden kurulunca
@@ -623,6 +645,7 @@ function onerileriKapat() {
   oneriSecim = -1;
   el.oneriler.hidden = true;
   el.oneriler.replaceChildren();
+  oneriGorunurlukGuncelle();
 }
 
 function oneriUygula(i) {
@@ -1561,6 +1584,23 @@ window.pusula.durumDinle((d) => {
 
 window.pusula.bulmaSonucuDinle(({ etkin, toplam }) => {
   el.bulSayac.textContent = (toplam ? etkin : 0) + '/' + toplam;
+});
+
+/*
+ * Sayfa görüntüsü: öneri açıkken main sayfayı gizleyip anlık görüntüsünü
+ * gönderir. Görüntüyü sayfa alanının başına (öneri listesinin üst kenarı)
+ * hizalıyoruz ki sayfa yerinde duruyormuş gibi görünsün. null gelirse öneri
+ * kapandı, görüntüyü kaldır.
+ */
+window.pusula.sayfaGoruntuDinle((veriUrl) => {
+  if (!veriUrl || !oneriAcikDurum) {
+    el.sayfaGoruntu.hidden = true;
+    el.sayfaGoruntu.style.backgroundImage = '';
+    return;
+  }
+  el.sayfaGoruntu.style.top = Math.round(el.oneriler.getBoundingClientRect().top) + 'px';
+  el.sayfaGoruntu.style.backgroundImage = 'url("' + veriUrl + '")';
+  el.sayfaGoruntu.hidden = false;
 });
 
 window.pusula.adresOdakDinle(() => {

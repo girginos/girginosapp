@@ -65,6 +65,10 @@ contextBridge.exposeInMainWorld('pusula', {
   siteIzinleriDinle: dinle('site-izinleri'),
   ayarDegistir: (anahtar, deger) => ipcRenderer.invoke('ayar:degistir', { anahtar, deger }),
   siteEngelleyici: () => ipcRenderer.invoke('site:engelleyici'),
+  // Öneri listesi açık/kapandı: main sayfa görünümünü gizleyip görüntüsünü
+  // veriyor ki liste sayfayı aşağı itmek yerine üstüne binebilsin.
+  oneriDurum: (acik) => ipcRenderer.invoke('oneri:durum', acik),
+  sayfaGoruntuDinle: dinle('sayfa-goruntu'),
 
   // Uygulama güncellemesi
   guncellemeKontrol: () => ipcRenderer.invoke('guncelleme:kontrol'),

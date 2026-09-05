@@ -355,6 +355,18 @@ svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width:
 #oneriler[hidden] { display: none; }
 
 /*
+ * Öneri açıkken sayfa görünümü gizlenip anlık görüntüsü buraya konur; liste
+ * sayfayı itmek yerine üstüne biner. Sabit konumlu ve chrome'un (z-index:10)
+ * altında, öneri onun üstünde. top JS'te sayfa alanının başına ayarlanıyor.
+ */
+#sayfaGoruntu {
+  position: fixed; left: 0; right: 0; bottom: 0; top: 0;
+  z-index: 1;
+  background: var(--zemin) center top / cover no-repeat;
+}
+#sayfaGoruntu[hidden] { display: none; }
+
+/*
  * Arama önerileri açıkken yer imleri çubuğu gizlenir. Öneri listesi sayfa
  * katmanının üstüne binemediği için chrome akışında duruyor; altındaki yer
  * imleri çubuğu da akışta kaldığından ikisi arka arkaya diziliyor ve şerit

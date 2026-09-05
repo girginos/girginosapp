@@ -2175,7 +2175,51 @@ function ipcKur() {
     durumGonder();
     return true;
   });
+
+  /*
+   * Öneri listesi açık/kapandı.
+   *
+   * Öneri listesi arayüz penceresinde; sayfa görünümü onun ÜSTÜNDE render
+   * edildiği için liste sayfanın üstüne binemiyordu ve chrome büyüyünce sayfa
+   * aşağı itiliyordu. Çözüm: öneri açılınca sayfanın anlık görüntüsünü alıp
+   * arayüze ver ve sayfa görünümünü GİZLE - liste artık boşalan alanın değil,
+   * sabit görüntünün üstüne biner, sayfa yerinde kalır.
+   *
+   * SIRA NUMARASI: capturePage asenkron; kullanıcı hızlı yazarken öneri açılıp
+   * kapanabiliyor. Yalnızca en son isteği uyguluyoruz, yoksa geç gelen bir
+   * "aç" sayfayı kapalı bırakır (görünmez sayfa - klasik sessiz hata).
+   */
+  handle('oneri:durum', async (_e, acik) => {
+    const s = aktifSekme();
+    if (!s || s.view.webContents.isDestroyed()) return false;
+    const sira = ++oneriDurumSira;
+
+    if (!acik) {
+      s.view.setVisible(true);
+      uiyeGonder('sayfa-goruntu', null);
+      return true;
+    }
+
+    let veriUrl = '';
+    try {
+      const img = await s.view.webContents.capturePage();
+      if (!img.isEmpty()) veriUrl = img.toDataURL();
+    } catch { /* görüntü alınamadı: aşağıda sayfa gizlenmez, eski davranışa döner */ }
+
+    // Bu istek beklerken daha yeni bir durum geldiyse dokunma.
+    if (sira !== oneriDurumSira) return false;
+    // Görüntü alınamadıysa sayfayı gizleme: boş alan, itilmiş sayfadan kötü.
+    if (!veriUrl) return false;
+    if (aktifSekme() !== s || s.view.webContents.isDestroyed()) return false;
+
+    uiyeGonder('sayfa-goruntu', veriUrl);
+    s.view.setVisible(false);
+    return true;
+  });
 }
+
+// Öneri açılış/kapanış isteklerini sıralamak için; capturePage asenkron.
+let oneriDurumSira = 0;
 
 /* ---------------------------------------------------------------- */
 /* Başlangıç                                                         */
