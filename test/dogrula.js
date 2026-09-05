@@ -405,6 +405,65 @@ esit('her kayıt geçerli alan adı biçiminde', LISTE.filter(d => !ALAN_BICIMI.
   esit('alan adsız çerez için url yok', cerezSilmeUrl({ domain: '' }), null);
 }
 
+/* ---- vekil sunucu ---- */
+{
+  const { adresCoz, adresGecerliMi, atlamaKurali, vekilKurallari, HEP_ATLANAN } = require('../src/vekil');
+
+  const yaz = (a) => (a ? a.sema + '|' + a.host + '|' + a.port : null);
+  esit('tam adres', yaz(adresCoz('socks5://127.0.0.1:9050')), 'socks5|127.0.0.1|9050');
+  esit('http varsayilan port', yaz(adresCoz('http://vekil.ornek.com')), 'http|vekil.ornek.com|8080');
+  esit('socks5 varsayilan port', yaz(adresCoz('socks5://localhost')), 'socks5|localhost|1080');
+  // Kullanicilarin cogu semasiz yaziyor; reddetmek gereksiz surtunme olurdu.
+  esit('semasiz adres http sayilir', yaz(adresCoz('192.168.1.10:3128')), 'http|192.168.1.10|3128');
+  esit('IPv6 koseli parantezle', yaz(adresCoz('socks5://[::1]:9050')), 'socks5|[::1]|9050');
+
+  /*
+   * socks4 BILEREK reddediliyor: Chromium'da socks4 alan adini YEREL cozer,
+   * yani gezilen her sitenin adi vekilden once DNS'e duser. Kullanici
+   * korundugunu sanarken alan adlari sizardi.
+   */
+  esit('socks4 kabul edilmez', adresCoz('socks4://127.0.0.1:9050'), null);
+  esit('bilinmeyen sema kabul edilmez', adresCoz('ftp://a.b:21'), null);
+  esit('yol tasiyan adres kabul edilmez', adresCoz('http://a.b:8080/yol'), null);
+  esit('kullanici adi kabul edilmez', adresCoz('http://ad@a.b:8080'), null);
+  esit('gecersiz port', adresCoz('http://a.b:abc'), null);
+  esit('sifir port', adresCoz('http://a.b:0'), null);
+  esit('cok buyuk port', adresCoz('http://a.b:70000'), null);
+  esit('bos adres', adresCoz(''), null);
+  esit('null adres', adresCoz(null), null);
+  esit('adresGecerliMi dogru', adresGecerliMi('socks5://127.0.0.1:9050'), true);
+  esit('adresGecerliMi yanlis', adresGecerliMi('socks4://x'), false);
+
+  // Yerel adresler vekile gonderilirse hem anlamsiz hem de Tor'da hata.
+  const atla = atlamaKurali('ornek.com, 10.0.0.1');
+  for (const y of HEP_ATLANAN) esit('yerel atlanir: ' + y, atla.split(',').includes(y), true);
+  esit('kullanici girdisi eklenir', atla.split(',').includes('ornek.com'), true);
+  esit('yerel adres iki kez yazilmaz',
+    atlamaKurali('localhost').split(',').filter((x) => x === 'localhost').length, 1);
+  esit('bos girdi cokmez', atlamaKurali('').includes('localhost'), true);
+
+  esit('kapali kip dogrudan', vekilKurallari({ vekilKip: 'kapali' }).mode, 'direct');
+  esit('ayar yoksa dogrudan', vekilKurallari({}).mode, 'direct');
+  esit('sistem kipi', vekilKurallari({ vekilKip: 'sistem' }).mode, 'system');
+
+  const elle = vekilKurallari({ vekilKip: 'elle', vekilAdres: 'socks5://127.0.0.1:9050', vekilAtla: '' });
+  esit('elle kipi sabit sunucu', elle.mode, 'fixed_servers');
+  esit('kural dizesi', elle.proxyRules, 'socks5://127.0.0.1:9050');
+  esit('elle kipi gecerli', elle.gecerli, true);
+
+  /*
+   * Adres bozukken DOGRUDAN baglanmaya dusmuyoruz: yazim hatasi yapan biri
+   * korundugunu sanarak gezmeye devam ederdi. Erisilemeyen bir kural istegi
+   * basarisiz kilar - hata gorunur, sizinti gorunmez.
+   */
+  const bozuk = vekilKurallari({ vekilKip: 'elle', vekilAdres: 'socks4://x', vekilAtla: '' });
+  esit('bozuk adres dogrudana dusmez', bozuk.mode, 'fixed_servers');
+  esit('bozuk adres gecersiz isaretli', bozuk.gecerli, false);
+  esit('bozuk adres erisilemez kural', bozuk.proxyRules, 'http://0.0.0.0:1');
+  esit('bos adres de dogrudana dusmez',
+    vekilKurallari({ vekilKip: 'elle', vekilAdres: '', vekilAtla: '' }).mode, 'fixed_servers');
+}
+
 /* ---- kozmetik filtreler ---- */
 {
   const { KozmetikDepo, kuralCoz, alanUyar, DEMET } = require('../src/kozmetik');

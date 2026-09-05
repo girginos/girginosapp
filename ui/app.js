@@ -1267,6 +1267,61 @@ function ayarlarPaneli() {
   });
   g.appendChild(ayarSatiri(cev('ayar.siteIzinleri'), cev('ayar.siteIzinleriAciklama'), izinSifirla));
 
+  /* ---- vekil sunucu ---- */
+  baslik('ayar.bolumVekil');
+
+  const vekilAdres = document.createElement('input');
+  const vekilAtla = document.createElement('input');
+
+  const vekilKip = document.createElement('select');
+  for (const [deger, anahtar] of [
+    ['kapali', 'ayar.vekilKapali'], ['sistem', 'ayar.vekilSistem'], ['elle', 'ayar.vekilElle']
+  ]) {
+    const o = document.createElement('option');
+    o.value = deger;
+    o.textContent = cev(anahtar);
+    if (deger === (a.vekilKip || 'kapali')) o.selected = true;
+    vekilKip.appendChild(o);
+  }
+  const elleAlanlari = () => {
+    const elle = vekilKip.value === 'elle';
+    vekilAdres.disabled = !elle;
+    vekilAtla.disabled = !elle;
+  };
+  vekilKip.addEventListener('change', () => {
+    window.pusula.ayarDegistir('vekilKip', vekilKip.value);
+    elleAlanlari();
+  });
+  g.appendChild(ayarSatiri(cev('ayar.vekil'), cev('ayar.vekilAciklama'), vekilKip));
+
+  /*
+   * Adres reddedilirse KULLANICI GÖRMELİ. Ana süreç geçersiz bir ayarı sessizce
+   * yok sayıyor; geri dönen ayarlarla karşılaştırmasak kullanıcı yazdığı adresin
+   * kaydedildiğini sanır ve korunduğunu düşünerek gezerdi.
+   */
+  const vekilUyari = document.createElement('div');
+  vekilUyari.className = 'a-aciklama a-uyari';
+  vekilUyari.hidden = true;
+  vekilUyari.textContent = cev('ayar.vekilAdresHatali');
+
+  vekilAdres.type = 'text';
+  vekilAdres.value = a.vekilAdres || '';
+  vekilAdres.placeholder = 'socks5://127.0.0.1:9050';
+  vekilAdres.addEventListener('change', async () => {
+    const yeni = vekilAdres.value.trim();
+    const sonuc = await window.pusula.ayarDegistir('vekilAdres', yeni);
+    vekilUyari.hidden = !sonuc || sonuc.vekilAdres === yeni;
+  });
+  g.appendChild(ayarSatiri(cev('ayar.vekilAdres'), cev('ayar.vekilAdresAciklama'), vekilAdres));
+  g.appendChild(vekilUyari);
+
+  vekilAtla.type = 'text';
+  vekilAtla.value = a.vekilAtla || '';
+  vekilAtla.placeholder = 'ornek.com, 192.168.1.1';
+  vekilAtla.addEventListener('change', () => window.pusula.ayarDegistir('vekilAtla', vekilAtla.value.trim()));
+  g.appendChild(ayarSatiri(cev('ayar.vekilAtla'), cev('ayar.vekilAtlaAciklama'), vekilAtla));
+  elleAlanlari();
+
   /* ---- filtre listeleri ---- */
   baslik('ayar.bolumListeler');
 

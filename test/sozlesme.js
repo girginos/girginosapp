@@ -170,7 +170,58 @@ for (const t of ['main.js']) {
   if (/userAgentFallback\s*=/.test(kod)) uaAyari.push(t + ' -> app.userAgentFallback =');
 }
 
+/*
+ * VEKILDEN KACAN OTURUM.
+ *
+ * Bir vekil ya her yere uygulanir ya da hicbir ise yaramaz. Yeni bir oturum
+ * eklemek tek satirlik bir is; onu VEKIL_OTURUMLARI'na yazmayi unutmak da
+ * oyle. Sonuc gorunmez: sekmeler vekilden cikar, o oturum dogrudan cikar ve
+ * kullanici korundugunu sanir. Bu yuzden kaynakta gecen her fromPartition adi
+ * listeye karsi denetleniyor.
+ */
+const vekilKacaklari = [];
+{
+  const kod = oku('main.js');
+  // vekilOturumlari() listenin KENDISI uzerinde donuyor; oradaki degisken adi
+  // yeni bir oturum degil.
+  const taranan = kod.replace(/function vekilOturumlari\(\)[\s\S]*?\n}/, '');
+
+  const listeEsleme = /const VEKIL_OTURUMLARI = \[([^\]]*)\]/.exec(kod);
+  const sabitDeger = (ad) => {
+    const m = new RegExp("const " + ad + " = '([^']+)'").exec(kod);
+    return m ? m[1] : null;
+  };
+  const coz = (ham) => {
+    const t = ham.trim();
+    const dize = /^'([^']*)'$/.exec(t);
+    return dize ? dize[1] : sabitDeger(t);
+  };
+
+  const listede = new Set();
+  if (!listeEsleme) vekilKacaklari.push('main.js -> VEKIL_OTURUMLARI bulunamadi');
+  else for (const p of listeEsleme[1].split(',')) {
+    const d = coz(p);
+    if (d) listede.add(d);
+  }
+
+  for (const m of taranan.matchAll(/fromPartition\(\s*([^,)]+)/g)) {
+    const ad = coz(m[1]);
+    if (ad === null) vekilKacaklari.push('main.js -> fromPartition(' + m[1].trim() + ') cozulemedi');
+    else if (!listede.has(ad)) vekilKacaklari.push('main.js -> ' + ad);
+  }
+
+  // electron-updater kendi bolumunden istek atiyor; adi kaynaktan okunuyor ki
+  // surum yukseltmesiyle degisirse burada patlasin, sessizce sizmasin.
+  try {
+    const u = fs.readFileSync(
+      path.join(kok, 'node_modules/electron-updater/out/electronHttpExecutor.js'), 'utf8');
+    const m = /NET_SESSION_NAME = "([^"]+)"/.exec(u);
+    if (m && !listede.has(m[1])) vekilKacaklari.push('electron-updater -> ' + m[1]);
+  } catch { /* paket yoksa denetlenecek bir sey de yok */ }
+}
+
 const denetimler = [
+  ['vekilden kacan oturum', vekilKacaklari],
   ['kullanici aracisi elle ayarlanmis', uaAyari],
   ['tanimsiz sabit (calisinca ReferenceError)', tanimsizSabitler],
   ['CSS kurali olmayan sinif', kuralsizSiniflar],

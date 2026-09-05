@@ -23,6 +23,7 @@ const {
 } = require('./src/menu-yerlesim');
 const { SertifikaDeposu } = require('./src/sertifikalar');
 const { silinecekCerezler, cerezSilmeUrl } = require('./src/cerezler');
+const { vekilKurallari, adresGecerliMi } = require('./src/vekil');
 const { ipucuBasliklari } = require('./src/istemci-ipuclari');
 
 // Şema ayrıcalıkları uygulama hazır olmadan bildirilmeli.
@@ -386,6 +387,9 @@ function sekmeOlustur({ url, arkaPlan = false, kaynak = 'kullanici' } = {}) {
   view.setVisible(false);
 
   olaylariBagla(t);
+  // Vekil acikken WebRTC gercek adresi yayinlayabiliyor. Politika sekme
+  // BASINA; yeni acilan sekmeye ayrica uygulanmazsa o sekme sizdirir.
+  view.webContents.setWebRTCIPHandlingPolicy(webrtcPolitikasi());
   view.webContents.loadURL(url || yeniSekmeAdresi());
 
   if (!arkaPlan) {
@@ -1170,6 +1174,53 @@ async function ipucuBasliklariniOku(wc) {
   } catch { /* okunamadi: baslik eklenmez */ }
 }
 
+/*
+ * VEKILDEN GECECEK BUTUN OTURUMLAR.
+ *
+ * Bir vekil ya her yere uygulanir ya da hicbir ise yaramaz: sekme vekilden
+ * cikarken guncelleme denetimi ya da liste indirmesi dogrudan cikarsa gercek
+ * adres yine gorunur, ustelik kullanici korundugunu sanarak gezer.
+ *
+ * "electron-updater" adini biz uydurmadik; electron-updater kendi istegini o
+ * bolumden atiyor (node_modules/electron-updater/out/electronHttpExecutor.js).
+ * Yeni bir oturum eklenirse buraya da eklenmeli; test/sozlesme.js kaynakta
+ * gecen her fromPartition adinin bu listede oldugunu denetliyor.
+ */
+const VEKIL_OTURUMLARI = [OTURUM, 'liste-indirme', 'electron-updater'];
+
+function vekilOturumlari() {
+  return [
+    session.defaultSession,
+    ...VEKIL_OTURUMLARI.map((ad) => session.fromPartition(ad, { cache: ad !== 'electron-updater' }))
+  ];
+}
+
+// Vekil acikken WebRTC gercek adresi acikca yayinlayabiliyor; bu bilinen bir
+// sizinti yolu ve vekilin butun anlamini goturur.
+function webrtcPolitikasi() {
+  return store.ayarlar.vekilKip === 'kapali' ? 'default' : 'disable_non_proxied_udp';
+}
+
+async function vekiliUygula() {
+  const kural = vekilKurallari(store.ayarlar);
+  const ayar = { mode: kural.mode };
+  if (kural.proxyRules) {
+    ayar.proxyRules = kural.proxyRules;
+    ayar.proxyBypassRules = kural.proxyBypassRules;
+  }
+  for (const o of vekilOturumlari()) {
+    try {
+      await o.setProxy(ayar);
+    } catch (e) {
+      console.error('Vekil uygulanamadi:', e.message);
+    }
+  }
+  for (const t of sekmeler.values()) {
+    const wc = t.view.webContents;
+    if (!wc.isDestroyed()) wc.setWebRTCIPHandlingPolicy(webrtcPolitikasi());
+  }
+}
+
 function oturumKur() {
   ses = session.fromPartition(OTURUM);
 
@@ -1225,6 +1276,9 @@ function oturumKur() {
       kanal: store.ayarlar.guncellemeKanali
     })
   });
+
+  // Vekil, oturumlar kurulduktan hemen sonra: ilk istek cikmadan once.
+  vekiliUygula();
 
   /*
    * Kayıtlı karar + genel varsayılandan tek bir cevap üretir. Hem istek
@@ -1486,6 +1540,11 @@ const AYAR_DOGRULAMA = {
   dntGonder: (v) => typeof v === 'boolean',
   ucuncuTarafCerez: (v) => typeof v === 'boolean',
   kapanistaCerezSil: (v) => typeof v === 'boolean',
+  vekilKip: (v) => v === 'kapali' || v === 'sistem' || v === 'elle',
+  // Bos adres kabul ediliyor: kullanici once kutuyu doldurup sonra kipi
+  // degistirmek isteyebilir. Bos adresle "elle" kipi zaten istekleri kesiyor.
+  vekilAdres: (v) => typeof v === 'string' && v.length <= 300 && (v === '' || adresGecerliMi(v)),
+  vekilAtla: (v) => typeof v === 'string' && v.length <= 1000,
   gecmisiKaydet: (v) => typeof v === 'boolean',
   yerImleriCubugu: (v) => typeof v === 'boolean',
   filtreListeleriAcik: (v) => typeof v === 'boolean',
@@ -1811,6 +1870,7 @@ function ipcKur() {
     const a = store.ayarla(p.anahtar, p.deger);
     if (p.anahtar === 'filtreListeleriAcik' && listeler) listeler.tazele();
     if (p.anahtar === 'tema') temayiUygula();
+    if (p.anahtar.startsWith('vekil')) vekiliUygula();
     if (p.anahtar === 'dil') {
       // Dil anında uygulanır: menü yeniden kurulur, arayüz yeni tabloyu alır.
       diliUygula();

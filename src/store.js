@@ -20,6 +20,11 @@ const DEFAULTS = {
     // Kapanışta çerezleri sil. Yer imlerindeki siteler korunur: onlar
     // kullanıcının bilerek sakladığı, oturumunu kaybetmek istemediği siteler.
     kapanistaCerezSil: false,
+    // Vekil sunucu. 'kapali' | 'sistem' | 'elle'
+    // Tor için: elle + socks5://127.0.0.1:9050
+    vekilKip: 'kapali',
+    vekilAdres: '',
+    vekilAtla: '',
     gecmisiKaydet: true,
     anasayfa: '',
     yerImleriCubugu: true,

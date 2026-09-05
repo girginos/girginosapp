@@ -7,6 +7,7 @@
   --cizgi: #d3d8e0;
   --vurgu: #2867ff;
   --vurgu-yumusak: rgba(40, 103, 255, .12);
+  --tehlike: #c62828;
   --sekme-aktif: #ffffff;
   --sekme-pasif: #e4e8ee;
   --sekme-pasif-uzeri: #f2f4f7;
@@ -25,6 +26,8 @@
     --cizgi: #333844;
     --vurgu: #4d8dff;
     --vurgu-yumusak: rgba(77, 141, 255, .18);
+    /* Koyu zeminde koyu kirmizi okunmuyor. */
+    --tehlike: #ff7b72;
     --sekme-aktif: #2a2e37;
     --sekme-pasif: #1b1e25;
     --sekme-pasif-uzeri: #232730;
@@ -692,6 +695,9 @@ svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width:
 .ayar .a-metin { flex: 1; min-width: 0; }
 .ayar .a-ad { font-size: 13px; }
 .ayar .a-aciklama { color: var(--metin2); font-size: 11.5px; margin-top: 3px; line-height: 1.4; }
+/* Reddedilen ayar uyarisi: sessizce yok sayilan bir deger kullaniciyi
+   korundugunu sanarak birakirdi. */
+.ayar .a-uyari { color: var(--tehlike); margin: -4px 0 10px; }
 
 .ayar select, .ayar input[type="text"] {
   flex: 0 0 auto;
