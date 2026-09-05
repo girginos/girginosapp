@@ -299,6 +299,7 @@ module.exports = {
     'izin.durumRet': 'ブロック',
     'izin.varsayilanEk': '既定',
     'izin.siteKarari': 'このサイト用に設定済みです。',
-    'izin.varsayilanIzleniyor': '全体の既定値を適用中です。'
+    'izin.varsayilanIzleniyor': '全体の既定値を適用中です。',
+    'izin.bilinmeyen': 'この権限（{ad}）'
   }
 };

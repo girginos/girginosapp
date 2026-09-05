@@ -951,3 +951,12 @@ svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width:
   font-size: 13px; font-weight: 600;
   word-break: break-all;
 }
+
+/* Boş liste bildirimi. app.js bu sınıfı üretiyordu ama kuralı yoktu; metin
+   biçimsiz ve hizasız kalıyordu. */
+.liste-bos {
+  padding: 30px 12px;
+  text-align: center;
+  color: var(--metin2);
+  font-size: 13px;
+}

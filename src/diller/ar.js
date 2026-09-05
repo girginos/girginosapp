@@ -299,6 +299,7 @@ module.exports = {
     'izin.durumRet': 'حظر',
     'izin.varsayilanEk': 'افتراضي',
     'izin.siteKarari': 'حددته لهذا الموقع.',
-    'izin.varsayilanIzleniyor': 'يُطبَّق الإعداد العام.'
+    'izin.varsayilanIzleniyor': 'يُطبَّق الإعداد العام.',
+    'izin.bilinmeyen': 'هذا الإذن ({ad})'
   }
 };

@@ -299,6 +299,7 @@ module.exports = {
     'izin.durumRet': 'Block',
     'izin.varsayilanEk': 'default',
     'izin.siteKarari': 'You set this for this site.',
-    'izin.varsayilanIzleniyor': 'Following the global default.'
+    'izin.varsayilanIzleniyor': 'Following the global default.',
+    'izin.bilinmeyen': 'this permission ({ad})'
   }
 };

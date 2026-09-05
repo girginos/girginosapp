@@ -299,6 +299,7 @@ module.exports = {
     'izin.durumRet': 'Blockieren',
     'izin.varsayilanEk': 'Standard',
     'izin.siteKarari': 'Von Ihnen für diese Website festgelegt.',
-    'izin.varsayilanIzleniyor': 'Globaler Standard gilt.'
+    'izin.varsayilanIzleniyor': 'Globaler Standard gilt.',
+    'izin.bilinmeyen': 'diese Berechtigung ({ad})'
   }
 };

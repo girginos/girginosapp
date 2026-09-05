@@ -837,6 +837,9 @@ async function siteIzinleriPaneli() {
     sec.addEventListener('change', async () => {
       await window.pusula.izinSiteAyarla(veri.origin, tur, sec.value);
       siteIzinVeri = await window.pusula.izinSiteOku(veri.origin);
+      // Panel yeniden çizilmezse ekran kaydedilenle çelişen bir durum gösterir:
+      // "genel varsayılan uygulanıyor" yazısı eski kalıyordu.
+      if (acikPanel === 'siteIzinleri') panelCiz();
     });
 
     kap.appendChild(ayarSatiri(
@@ -992,7 +995,7 @@ function indirmelerPaneli() {
 
     const alt = document.createElement('div');
     alt.className = 's-url';
-    alt.textContent = INDIRME_DURUMU[i.durum] + (i.toplam > 0 ? ' · ' + boyutMetni(i.alinan) + ' / ' + boyutMetni(i.toplam) : '');
+    alt.textContent = indirmeDurumu(i.durum) + (i.toplam > 0 ? ' · ' + boyutMetni(i.alinan) + ' / ' + boyutMetni(i.toplam) : '');
     sol.append(ad, alt);
 
     if (i.durum === 'devam' && i.toplam > 0) {

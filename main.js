@@ -291,6 +291,19 @@ function katmanGoster(icerik) {
 
   if (katmanHazirMi) katmanGorunum.webContents.send('katman:icerik', icerik);
   else katmanBekleyenIcerik = icerik;      // sayfa yüklenince gönderilecek
+
+  // Odak verilmezse katmandaki Escape dinleyicisi ve "odak Reddet'te başlasın"
+  // savunması hiç çalışmıyor; tuşlar isteği yapan sayfada kalıyor.
+  g.webContents.focus();
+}
+
+// Katman açıksa en üste geri alır.
+function katmaniOneAl() {
+  if (!katmanAcikMi()) return;
+  try {
+    win.contentView.removeChildView(katmanGorunum);
+    win.contentView.addChildView(katmanGorunum);
+  } catch { /* pencere kapanıyor olabilir */ }
 }
 
 function katmanGizle() {
@@ -361,6 +374,10 @@ function sekmeOlustur({ url, arkaPlan = false, kaynak = 'kullanici' } = {}) {
   };
   sekmeler.set(t.id, t);
   win.contentView.addChildView(view);
+  // Sekme görünümü sonradan eklendiği için katmanın üstüne çıkar ve açık bir
+  // izin kutusunu gömer; kutu gömülünce söz hiç çözülmez ve izinOnayAcik
+  // takılı kalıp SONRAKİ TÜM izin isteklerini sessizce reddeder.
+  katmaniOneAl();
   view.setVisible(false);
 
   olaylariBagla(t);
@@ -1029,6 +1046,7 @@ function menuKur() {
 const IZIN_TURLERI = [
   'notifications', 'geolocation', 'media', 'midi', 'midiSysex',
   'clipboard-read', 'display-capture', 'openExternal', 'idle-detection',
+  'storage-access',
   'pointerLock', 'fullscreen'
 ];
 
@@ -1107,10 +1125,36 @@ function oturumKur() {
    * yazılırsa zamanla farklı cevap verirler.
    * Döner: 'izin' | 'ret' | 'sor'
    */
+  /*
+   * Electron 46 izin adi uretiyor, bizim tablomuzda 11 tanesi var. Cevirisi
+   * olmayan tur icin cev() anahtarin KENDISINI donduruyordu; kullanici
+   * kutuda "izin.window-management" yaziyordu.
+   */
+  function izinAdi(izin) {
+    const anahtar = 'izin.' + izin;
+    const metin = cev(anahtar);
+    return metin === anahtar ? cev('izin.bilinmeyen', { ad: izin }) : metin;
+  }
+
   function izinKarari(origin, izin) {
     const kayitli = store.izinOku(origin, izin);
     if (kayitli) return kayitli;
     return (store.ayarlar.izinVarsayilan || {})[izin] || 'sor';
+  }
+
+  /*
+   * Origin anahtarini tek bicime indirger. Chromium, setPermissionCheckHandler'a
+   * origin'i sondaki '/' ile veriyor ("https://site/"), URL.origin ise slashsiz
+   * uretiyor ("https://site"). Ikisi ayni anahtar sayilmazsa denetim kapisi
+   * KAYITLI HICBIR karari goremez: izin verilmis siteye "reddedildi",
+   * engellenmis siteye genel varsayilan uygulanir. Olculerek bulundu.
+   */
+  function originNormalle(deger) {
+    try {
+      const u = new URL(String(deger));
+      if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
+      return u.origin;
+    } catch { return null; }
   }
 
   function istekOrigini(wc, ayrinti) {
@@ -1134,9 +1178,7 @@ function oturumKur() {
    * demesi. Alternatifi (true dönmek) siteye yalan söylemek olurdu.
    */
   ses.setPermissionCheckHandler((wc, izin, kaynakOrigin, ayrinti) => {
-    const origin = kaynakOrigin && /^https?:/.test(kaynakOrigin)
-      ? kaynakOrigin
-      : istekOrigini(wc || {}, ayrinti);
+    const origin = originNormalle(kaynakOrigin) || istekOrigini(wc || {}, ayrinti);
     if (!origin) return false;
     return izinKarari(origin, izin) === 'izin';
   });
@@ -1156,7 +1198,10 @@ function oturumKur() {
    * onaylaması demek olurdu.
    */
   ses.setDisplayMediaRequestHandler((_istek, callback) => {
-    callback({});   // kaynak yok -> paylaşım başlamaz
+    // Argümansız çağrı reddetmenin biçimi. callback({}) Electron'un
+    // sarmalayıcısında TypeError atıp ana süreçte yakalanmamış bir söz
+    // reddi bırakıyordu.
+    callback();
   });
 
   ses.setPermissionRequestHandler(async (wc, izin, callback, ayrinti) => {
@@ -1191,7 +1236,7 @@ function oturumKur() {
           baslik: cev('dialog.izinBaslik'),
           kaynak: origin,
           istiyor: cev('dialog.izinIstiyor'),
-          ne: cev('izin.' + izin),
+          ne: izinAdi(izin),
           hatirlaMetni: cev('dialog.izinHatirla'),
           reddetMetni: cev('dialog.reddet'),
           izinMetni: cev('dialog.izinVer')
@@ -1739,6 +1784,10 @@ if (!app.requestSingleInstanceLock()) {
       ];
       faviconlar.onIsit(hostlar).catch(() => {});
     }, 4000).unref?.();
+
+    // Pencere kapanirken asili bir izin istegi kalirsa izinOnayAcik sonsuza
+    // dek true kalir ve SONRAKI TUM izin istekleri sessizce reddedilir.
+    win.on('closed', () => { katmanGizle(); });
 
     nativeTheme.on('updated', () => {
       if (!win || win.isDestroyed() || process.platform === 'darwin') return;

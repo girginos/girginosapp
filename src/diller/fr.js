@@ -299,6 +299,7 @@ module.exports = {
     'izin.durumRet': 'Bloquer',
     'izin.varsayilanEk': 'par défaut',
     'izin.siteKarari': 'Vous l’avez défini pour ce site.',
-    'izin.varsayilanIzleniyor': 'Valeur par défaut appliquée.'
+    'izin.varsayilanIzleniyor': 'Valeur par défaut appliquée.',
+    'izin.bilinmeyen': 'cette autorisation ({ad})'
   }
 };

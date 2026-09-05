@@ -299,6 +299,7 @@ module.exports = {
     'izin.durumRet': 'Блокировать',
     'izin.varsayilanEk': 'по умолчанию',
     'izin.siteKarari': 'Вы задали это для сайта.',
-    'izin.varsayilanIzleniyor': 'Применяется общее значение.'
+    'izin.varsayilanIzleniyor': 'Применяется общее значение.',
+    'izin.bilinmeyen': 'это разрешение ({ad})'
   }
 };

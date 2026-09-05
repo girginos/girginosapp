@@ -299,6 +299,7 @@ module.exports = {
     'izin.durumRet': 'Bloquear',
     'izin.varsayilanEk': 'padrão',
     'izin.siteKarari': 'Definido por si para este site.',
-    'izin.varsayilanIzleniyor': 'A aplicar o padrão global.'
+    'izin.varsayilanIzleniyor': 'A aplicar o padrão global.',
+    'izin.bilinmeyen': 'esta permissão ({ad})'
   }
 };

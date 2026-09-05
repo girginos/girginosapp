@@ -102,7 +102,61 @@ for (const t of [...testDosyalari, 'main.js', 'ui/app.js']) {
   if (say) hamKontrol.push(t + ' (' + say + ')');
 }
 
+/*
+ * Tanimsiz SCREAMING_CASE sabitleri. ui/app.js'te INDIRME_DURUMU boyle
+ * kalmisti: node --check gecer, dosya yuklenir, ama satir CALISINCA
+ * ReferenceError atar ve panel kalici olarak bos kalir. Yayina cikti.
+ */
+function koduSadelestir(metin) {
+  // Yorumlar ve dize/sablon icerikleri cikariliyor: oralardaki buyuk harfli
+  // kelimeler (HTML, CVE, SONRA...) tanimlayici degil.
+  return metin
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/(^|[^:])\/\/[^\n]*/g, '$1 ')
+    .replace(/'(?:[^'\\\n]|\\.)*'/g, "''")
+    .replace(/"(?:[^"\\\n]|\\.)*"/g, '""')
+    .replace(/`(?:[^`\\]|\\.)*`/g, '``');
+}
+
+const TANINAN_GLOBAL = new Set(['JSON', 'URL', 'NaN', 'Infinity', 'Math', 'Intl', 'DOM']);
+
+const tanimsizSabitler = [];
+for (const t of ['ui/app.js', 'ui/katman.js', 'ui/newtab.js', 'ui/error.js', 'main.js']) {
+  const kod = koduSadelestir(oku(t));
+  const kullanilan = new Set([...kod.matchAll(/\b([A-Z][A-Z0-9_]{2,})\b/g)].map((m) => m[1]));
+  for (const ad of kullanilan) {
+    if (TANINAN_GLOBAL.has(ad)) continue;
+    // require({ A, B: C }) ile içeri alınanlar da tanımlı sayılır.
+    const tanimli = new RegExp('(?:const|let|var|function|class)\\s+' + ad + '\\b').test(kod)
+      || new RegExp('\\b' + ad + '\\s*[:=][^=]').test(kod)
+      || new RegExp('[{,]\\s*' + ad + '\\s*[,}]').test(kod)
+      || new RegExp(':\\s*' + ad + '\\s*[,}]').test(kod);
+    if (!tanimli) tanimsizSabitler.push(t + ' -> ' + ad);
+  }
+}
+
+/*
+ * Uretilen ama CSS kurali olmayan sinif adlari. Bu sinif iki kez yasandi:
+ * .ilerleme (ilerleme cubugu gorunmezdi) ve .liste-bos. Ogenin kurali yoksa
+ * hata da olmaz, sadece hicbir sey gorunmez.
+ */
+const cssMetin = oku('ui/style.css') + oku('ui/katman.css');
+const kuralsizSiniflar = [];
+for (const t of ['ui/app.js', 'ui/katman.js']) {
+  const metin = oku(t);
+  const adlar = new Set();
+  for (const m of metin.matchAll(/className = '([^']+)'/g)) {
+    for (const p of m[1].split(/\s+/)) if (p) adlar.add(p);
+  }
+  for (const m of metin.matchAll(/classList\.(?:add|toggle)\('([^']+)'/g)) adlar.add(m[1]);
+  for (const ad of adlar) {
+    if (!cssMetin.includes('.' + ad)) kuralsizSiniflar.push(t + ' -> .' + ad);
+  }
+}
+
 const denetimler = [
+  ['tanimsiz sabit (calisinca ReferenceError)', tanimsizSabitler],
+  ['CSS kurali olmayan sinif', kuralsizSiniflar],
   ['sonuç kontrolünden sonra iddia', olusuzIddialar],
   ['kaynakta ham kontrol karakteri', hamKontrol],
   ['katman kanalı arayüz kapısında (sessizce düşer)',

@@ -312,6 +312,7 @@ module.exports = {
     'izin.durumRet': 'Reddet',
     'izin.varsayilanEk': 'varsayılan',
     'izin.siteKarari': 'Bu site için siz karar verdiniz.',
-    'izin.varsayilanIzleniyor': 'Genel varsayılan uygulanıyor.'
+    'izin.varsayilanIzleniyor': 'Genel varsayılan uygulanıyor.',
+    'izin.bilinmeyen': 'bu izin ({ad})'
   }
 };

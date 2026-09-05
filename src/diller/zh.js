@@ -299,6 +299,7 @@ module.exports = {
     'izin.durumRet': '阻止',
     'izin.varsayilanEk': '默认',
     'izin.siteKarari': '你为此网站设置了该项。',
-    'izin.varsayilanIzleniyor': '正在应用全局默认值。'
+    'izin.varsayilanIzleniyor': '正在应用全局默认值。',
+    'izin.bilinmeyen': '此权限（{ad}）'
   }
 };
