@@ -54,7 +54,11 @@ function diliUygula() {
 }
 
 let chromeYukseklik = VARSAYILAN_CHROME_YUKSEKLIK;
-let katmanAcik = false;           // arayüzde tam ekran panel açık mı
+// Arayüzdeki panel (Geçmiş/Ayarlar/İndirilenler) açık mı.
+// DİKKAT: katmanAcikMi() ile karıştırılmasın - o, sayfanın üstündeki açılır
+// kutu katmanını sorar. İkisi bir süre 'panelAcik' ve 'katmanAcikMi' olarak
+// yan yana durdu; bu adlandırma hataya davetiyeydi.
+let panelAcik = false;
 const sekmeler = new Map();       // id -> sekme
 let aktifId = null;
 let sonrakiId = 1;
@@ -326,7 +330,7 @@ function yerlesimGuncelle() {
   if (!win || win.isDestroyed()) return;
   const { width, height } = win.getContentBounds();
   if (katmanAcikMi()) katmanGorunum.setBounds({ x: 0, y: 0, width, height });
-  const y = katmanAcik ? height : chromeYukseklik;
+  const y = panelAcik ? height : chromeYukseklik;
   for (const t of sekmeler.values()) {
     if (t.view.webContents.isDestroyed()) continue;
     t.view.setBounds({ x: 0, y, width, height: Math.max(0, height - y) });
@@ -396,12 +400,12 @@ function sekmeSec(id) {
   const t = sekmeler.get(id);
   if (!t) return;
   for (const [tid, tab] of sekmeler) {
-    if (!tab.view.webContents.isDestroyed()) tab.view.setVisible(tid === id && !katmanAcik);
+    if (!tab.view.webContents.isDestroyed()) tab.view.setVisible(tid === id && !panelAcik);
   }
   aktifId = id;
   yerlesimGuncelle();
   // Panel açıkken odağı görünmez sayfaya vermek panelde yazmayı öldürüyordu.
-  if (!katmanAcik && !t.view.webContents.isDestroyed()) t.view.webContents.focus();
+  if (!panelAcik && !t.view.webContents.isDestroyed()) t.view.webContents.focus();
   durumGonder();
 }
 
@@ -711,11 +715,11 @@ async function anaMenuGoster(konum) {
     {
       label: cev('menu.gecmis'),
       submenu: [
-        { label: cev('menu.gecmisiGoster'), accelerator: 'CmdOrCtrl+H', click: () => uiyeGonder('panel-ac', 'gecmis') },
+        { label: cev('menu.gecmisiGoster'), accelerator: 'CmdOrCtrl+H', click: () => uiyeGonder('panel-ac', { ad: 'gecmis', kip: 'degistir' }) },
         ...(sonGecmis.length ? [{ type: 'separator' }, ...sonGecmis] : [])
       ]
     },
-    { label: cev('menu.indirilenler'), accelerator: 'CmdOrCtrl+J', click: () => uiyeGonder('panel-ac', 'indirmeler') },
+    { label: cev('menu.indirilenler'), accelerator: 'CmdOrCtrl+J', click: () => uiyeGonder('panel-ac', { ad: 'indirmeler', kip: 'degistir' }) },
     {
       label: cev('menu.yerImleri'),
       submenu: [
@@ -725,7 +729,7 @@ async function anaMenuGoster(konum) {
           enabled: gercekSayfa,
           click: () => { if (s) { store.yerImiDegistir(s.url, s.baslik); durumGonder(); } }
         },
-        { label: cev('menu.yerImleriniGoster'), accelerator: 'CmdOrCtrl+Shift+O', click: () => uiyeGonder('panel-ac', 'yerImleri') },
+        { label: cev('menu.yerImleriniGoster'), accelerator: 'CmdOrCtrl+Shift+O', click: () => uiyeGonder('panel-ac', { ad: 'yerImleri', kip: 'degistir' }) },
         {
           label: cev('menu.yerImleriCubugu'),
           type: 'checkbox',
@@ -771,8 +775,8 @@ async function anaMenuGoster(konum) {
       ]
     },
     { type: 'separator' },
-    { label: cev('menu.veriSil'), accelerator: 'CmdOrCtrl+Shift+Delete', click: () => uiyeGonder('panel-ac', 'ayarlar') },
-    { label: cev('menu.ayarlar'), accelerator: 'CmdOrCtrl+,', click: () => uiyeGonder('panel-ac', 'ayarlar') },
+    { label: cev('menu.veriSil'), accelerator: 'CmdOrCtrl+Shift+Delete', click: () => uiyeGonder('panel-ac', { ad: 'ayarlar', kip: 'degistir' }) },
+    { label: cev('menu.ayarlar'), accelerator: 'CmdOrCtrl+,', click: () => uiyeGonder('panel-ac', { ad: 'ayarlar', kip: 'degistir' }) },
     { label: cev('menu.hakkinda'), click: () => hakkindaGoster() },
     { type: 'separator' },
     { label: cev('menu.cikis'), accelerator: 'CmdOrCtrl+Q', role: 'quit' }
@@ -948,7 +952,7 @@ function menuKur() {
         { label: cev('menu.sayfayiKaydet'), accelerator: 'CmdOrCtrl+S', click: () => sayfayiKaydet() },
         {
           label: cev('menu.veriSil'), accelerator: 'CmdOrCtrl+Shift+Delete',
-          click: () => uiye('panel-ac', 'ayarlar')
+          click: () => uiye('panel-ac', { ad: 'ayarlar', kip: 'degistir' })
         },
         { type: 'separator' },
         { label: cev('menu.cikis'), accelerator: 'CmdOrCtrl+Q', role: 'quit' }
@@ -993,15 +997,15 @@ function menuKur() {
         { label: cev('menu.geri'), accelerator: 'Alt+Left', click: wcIle(c => c.navigationHistory.goBack()) },
         { label: cev('menu.ileri'), accelerator: 'Alt+Right', click: wcIle(c => c.navigationHistory.goForward()) },
         { type: 'separator' },
-        { label: cev('menu.gecmisiGoster'), accelerator: 'CmdOrCtrl+H', click: () => uiye('panel-ac', 'gecmis') },
-        { label: cev('menu.indirilenler'), accelerator: 'CmdOrCtrl+J', click: () => uiye('panel-ac', 'indirmeler') }
+        { label: cev('menu.gecmisiGoster'), accelerator: 'CmdOrCtrl+H', click: () => uiye('panel-ac', { ad: 'gecmis', kip: 'degistir' }) },
+        { label: cev('menu.indirilenler'), accelerator: 'CmdOrCtrl+J', click: () => uiye('panel-ac', { ad: 'indirmeler', kip: 'degistir' }) }
       ]
     },
     {
       label: cev('menu.yerImleri'),
       submenu: [
         { label: cev('menu.yerImiEkle'), accelerator: 'CmdOrCtrl+D', click: () => uiye('yer-imi-degistir') },
-        { label: cev('menu.yerImleriniGoster'), accelerator: 'CmdOrCtrl+Shift+O', click: () => uiye('panel-ac', 'yerImleri') },
+        { label: cev('menu.yerImleriniGoster'), accelerator: 'CmdOrCtrl+Shift+O', click: () => uiye('panel-ac', { ad: 'yerImleri', kip: 'degistir' }) },
         { type: 'separator' },
         {
           label: cev('menu.yerImleriCubugu'), accelerator: 'CmdOrCtrl+Shift+B',
@@ -1028,8 +1032,8 @@ function menuKur() {
     {
       label: cev('menu.yardim'),
       submenu: [
-        { label: cev('menu.ayarlar'), accelerator: 'CmdOrCtrl+,', click: () => uiye('panel-ac', 'ayarlar') },
-        { label: cev('menu.guncellemeDenetle'), click: () => uiye('panel-ac', 'ayarlar') },
+        { label: cev('menu.ayarlar'), accelerator: 'CmdOrCtrl+,', click: () => uiye('panel-ac', { ad: 'ayarlar', kip: 'degistir' }) },
+        { label: cev('menu.guncellemeDenetle'), click: () => uiye('panel-ac', { ad: 'ayarlar', kip: 'degistir' }) },
         { label: cev('menu.hakkinda'), click: () => hakkindaGoster() }
       ]
     }
@@ -1427,12 +1431,12 @@ function ipcKur() {
     arayuzOlculeri = { kilitSol: sayi(o.kilitSol), kilitAlt: sayi(o.kilitAlt) };
   });
 
-  on('ui:katman', (_e, acik) => {
-    katmanAcik = !!acik;
+  on('ui:panel', (_e, acik) => {
+    panelAcik = !!acik;
     const s = aktifSekme();
-    if (s && !s.view.webContents.isDestroyed()) s.view.setVisible(!katmanAcik);
+    if (s && !s.view.webContents.isDestroyed()) s.view.setVisible(!panelAcik);
     // Panel açılırken odak arayüzde kalmalı, yoksa panelde yazılamaz.
-    if (katmanAcik && win && !win.isDestroyed()) win.webContents.focus();
+    if (panelAcik && win && !win.isDestroyed()) win.webContents.focus();
     yerlesimGuncelle();
   });
 
@@ -1617,7 +1621,7 @@ function ipcKur() {
 
   katmanOn('katman:tumunu-goster', () => {
     katmanGizle();
-    uiyeGonder('panel-ac', 'indirmeler');
+    uiyeGonder('panel-ac', { ad: 'indirmeler', kip: 'ac' });
   });
 
   katmanOn('katman:izin', (_e, karar) => {
@@ -1684,7 +1688,7 @@ function ipcKur() {
         enabled: !!(s && !icSayfaMi(s.url)),
         click: () => { if (s) { store.yerImiDegistir(s.url, s.baslik); durumGonder(); } }
       },
-      { label: cev('menu.yerImleriniGoster'), click: () => uiyeGonder('panel-ac', 'yerImleri') },
+      { label: cev('menu.yerImleriniGoster'), click: () => uiyeGonder('panel-ac', { ad: 'yerImleri', kip: 'degistir' }) },
       {
         label: cev('yerimi.cubuguGizle'),
         click: () => { store.ayarla('yerImleriCubugu', false); durumGonder(); }
@@ -1787,7 +1791,12 @@ if (!app.requestSingleInstanceLock()) {
 
     // Pencere kapanirken asili bir izin istegi kalirsa izinOnayAcik sonsuza
     // dek true kalir ve SONRAKI TUM izin istekleri sessizce reddedilir.
-    win.on('closed', () => { katmanGizle(); });
+    win.on('closed', () => {
+      katmanGizle();
+      // Bayrak modul duzeyinde; sifirlanmazsa yeni pencerede butun
+      // sekme gorunumleri gizli kalir.
+      panelAcik = false;
+    });
 
     nativeTheme.on('updated', () => {
       if (!win || win.isDestroyed() || process.platform === 'darwin') return;

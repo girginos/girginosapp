@@ -755,7 +755,7 @@ el.bulKapat.addEventListener('click', bulmaKapat);
 function panelAc(ad) {
   acikPanel = ad;
   el.panel.hidden = false;
-  window.pusula.katmanBildir(true);
+  window.pusula.panelBildir(true);
   panelCiz();
 }
 
@@ -765,7 +765,7 @@ function panelKapat() {
   el.panel.hidden = true;
   el.panelArac.replaceChildren();
   el.panelIcerik.replaceChildren();
-  window.pusula.katmanBildir(false);
+  window.pusula.panelBildir(false);
 }
 
 el.panelKapat.addEventListener('click', panelKapat);
@@ -1450,8 +1450,15 @@ window.pusula.adresOdakDinle(() => {
 
 window.pusula.bulmaAcDinle(() => { if (!acikPanel) bulmaAc(); });
 window.pusula.yerImiKisayolDinle(() => window.pusula.yerImiDegistir());
-window.pusula.panelAcDinle((ad) => {
-  if (acikPanel === ad) panelKapat(); else panelAc(ad);
+window.pusula.panelAcDinle((istek) => {
+  // Kisayollar ayni paneli acip kapatir; 'Tumunu goster' gibi olumlu
+  // eylemler ise SADECE acar. Ikisi ayni sayilinca, panel zaten acikken
+  // 'Tumunu goster' onu kapatiyordu.
+  const ad = typeof istek === 'string' ? istek : (istek && istek.ad);
+  const kip = typeof istek === 'string' ? 'degistir' : (istek && istek.kip);
+  if (!ad) return;
+  if (kip === 'degistir' && acikPanel === ad) panelKapat();
+  else panelAc(ad);
 });
 
 /* ---------------- klavye ---------------- */
