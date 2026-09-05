@@ -54,6 +54,9 @@ module.exports = {
     'menu.digerAraclar': 'Diğer araçlar',
     'menu.yakinlastirma': 'Yakınlaştırma',
     'menu.veriSil': 'Tarama verilerini sil…',
+    'arac.onbellek': 'Önbelleği sıfırla',
+    'arac.onbellekTemizlendi': 'Önbellek sıfırlandı, sayfa yenilendi',
+    'arac.onbellekHata': 'Önbellek sıfırlanamadı',
     'arac.menu': 'Menü',
 
     /* --- bağlam menüsü --- */

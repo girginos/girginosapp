@@ -48,6 +48,7 @@ contextBridge.exposeInMainWorld('pusula', {
   gecmisListele: (sorgu) => ipcRenderer.invoke('gecmis:listele', sorgu),
   gecmisTemizle: () => ipcRenderer.invoke('gecmis:temizle'),
   veriTemizle: () => ipcRenderer.invoke('veri:temizle'),
+  onbellekTemizle: () => ipcRenderer.invoke('onbellek:temizle'),
   izinTemizle: () => ipcRenderer.invoke('izin:temizle'),
   izinVarsayilanAyarla: (izin, karar) => ipcRenderer.invoke('izin:varsayilan', { izin, karar }),
   izinSiteOku: (origin) => ipcRenderer.invoke('izin:site', origin),

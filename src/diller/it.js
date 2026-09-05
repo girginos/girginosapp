@@ -50,6 +50,9 @@ module.exports = {
     'menu.digerAraclar': 'Altri strumenti',
     'menu.yakinlastirma': 'Zoom',
     'menu.veriSil': 'Elimina dati di navigazione…',
+    'arac.onbellek': 'Reimposta la cache',
+    'arac.onbellekTemizlendi': 'Cache svuotata, pagina ricaricata',
+    'arac.onbellekHata': 'Impossibile svuotare la cache',
     'arac.menu': 'Menu',
 
     'baglam.baglantiYeniSekme': 'Apri link in una nuova scheda',

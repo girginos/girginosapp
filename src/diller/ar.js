@@ -50,6 +50,9 @@ module.exports = {
     'menu.digerAraclar': 'أدوات أخرى',
     'menu.yakinlastirma': 'التكبير',
     'menu.veriSil': 'حذف بيانات التصفح…',
+    'arac.onbellek': 'إعادة ضبط ذاكرة التخزين المؤقت',
+    'arac.onbellekTemizlendi': 'تم مسح ذاكرة التخزين المؤقت وإعادة تحميل الصفحة',
+    'arac.onbellekHata': 'تعذّر مسح ذاكرة التخزين المؤقت',
     'arac.menu': 'القائمة',
 
     'baglam.baglantiYeniSekme': 'فتح الرابط في علامة تبويب جديدة',

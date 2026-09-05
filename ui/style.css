@@ -8,6 +8,9 @@
   --vurgu: #2867ff;
   --vurgu-yumusak: rgba(40, 103, 255, .12);
   --tehlike: #c62828;
+  /* Ayrac cizgisi. --cizgi kart kenarlari icin yeterince yumusak ama arayuz
+     ile sayfa arasindaki siniri tasiyacak kadar belirgin degildi. */
+  --cizgi-guclu: #b6bfcc;
   --sekme-aktif: #ffffff;
   --sekme-pasif: #e4e8ee;
   --sekme-pasif-uzeri: #f2f4f7;
@@ -28,6 +31,7 @@
     --vurgu-yumusak: rgba(77, 141, 255, .18);
     /* Koyu zeminde koyu kirmizi okunmuyor. */
     --tehlike: #ff7b72;
+    --cizgi-guclu: #464c5a;
     --sekme-aktif: #2a2e37;
     --sekme-pasif: #1b1e25;
     --sekme-pasif-uzeri: #232730;
@@ -82,9 +86,11 @@ svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width:
   align-items: center;
   gap: 8px;
   height: 33px;
-  min-width: 120px;
-  max-width: 300px;
-  flex: 1 1 260px;
+  /* Chrome'un azami sekme genisligi 240px civari; 300px belirgin sekilde
+     genisti ve az sayida sekmede bile serit gereginden dolu gorunuyordu. */
+  min-width: 92px;
+  max-width: 220px;
+  flex: 1 1 200px;
   padding: 0 8px 0 12px;
   border-radius: 10px 10px 0 0;
   color: var(--metin2);
@@ -311,6 +317,13 @@ svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width:
   top: 0; left: 0; right: 0;
   background: var(--sekme-aktif);
   z-index: 10;
+  /*
+   * Arayuz ile sayfa arasindaki sinir. box-shadow BILEREK: border yuksekligi
+   * degistirir ve sayfa gorunumunun konumu chrome yuksekligi olculerek
+   * belirlendigi icin her yeniden cizimde bir piksel kaymaya yol acardi.
+   * Inset golge yer kaplamaz.
+   */
+  box-shadow: inset 0 -1px 0 var(--cizgi-guclu);
 }
 
 /* ---------- Öneri listesi ---------- */
@@ -382,7 +395,7 @@ svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width:
   height: 30px;
   padding: 0 8px;
   overflow: hidden;
-  border-top: 1px solid var(--cizgi);
+  border-top: 1px solid var(--cizgi-guclu);
 }
 #yerImleriCubugu[hidden] { display: none; }
 
@@ -700,6 +713,10 @@ svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width:
 /* Uyari satiri .ayar-grup'un DOGRUDAN cocugu; ".ayar .a-uyari" hicbir zaman
    eslesmiyordu, yani reddedilen ayar uyarisi normal aciklama gibi gorunuyordu.
    Tam bu hata sinifi icin yazilmis muhafiz da yanlis gecmisti. */
+/* Onbellek dugmesinin gecici durumlari: islem bittigini gormek gerekiyor. */
+.ikon.calisiyor { opacity: .5; }
+.ikon.tamam { color: var(--vurgu); background: var(--vurgu-yumusak); }
+
 .ayar-grup > .a-uyari {
   color: var(--tehlike);
   font-size: 11.5px;

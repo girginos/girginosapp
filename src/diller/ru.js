@@ -50,6 +50,9 @@ module.exports = {
     'menu.digerAraclar': 'Дополнительные инструменты',
     'menu.yakinlastirma': 'Масштаб',
     'menu.veriSil': 'Удалить данные о просмотре…',
+    'arac.onbellek': 'Сбросить кэш',
+    'arac.onbellekTemizlendi': 'Кэш очищен, страница перезагружена',
+    'arac.onbellekHata': 'Не удалось очистить кэш',
     'arac.menu': 'Меню',
 
     'baglam.baglantiYeniSekme': 'Открыть ссылку в новой вкладке',

@@ -1870,6 +1870,32 @@ function ipcKur() {
     return true;
   });
 
+  /*
+   * ONBELLEGI SIFIRLA.
+   *
+   * Kullanicilarin en sik takildigi sey eski surumu gormek. Yalnizca
+   * "onbelleksiz yenile" yetmiyor: alt kaynaklar (script, stil) ayni
+   * onbellekten gelmeye devam edebiliyor. Bu yuzden once HTTP onbellegi
+   * bosaltiliyor, sonra sayfa onbellek yok sayilarak yeniden yukleniyor.
+   *
+   * GEZINTI VERISI SILINMIYOR: cerez, gecmis, oturum yerinde kaliyor.
+   * Kullanici "onbellegi sifirla" derken oturumunun kapanmasini beklemiyor.
+   */
+  handle('onbellek:temizle', async () => {
+    try {
+      // Liste indirmeleri ve guncelleme de kendi onbelleklerini tutuyor;
+      // yalnizca gezinti oturumunu temizlemek "eski surum" sikayetini
+      // yarim cozerdi.
+      for (const o of vekilOturumlari()) await o.clearCache();
+      const t = aktifSekme();
+      if (t && !t.view.webContents.isDestroyed()) t.view.webContents.reloadIgnoringCache();
+      return true;
+    } catch (e) {
+      console.error('Onbellek temizlenemedi:', e.message);
+      return false;
+    }
+  });
+
   handle('izin:varsayilan', (_e, p) => {
     const gecerli = ['sor', 'izin', 'ret'];
     if (!p || !IZIN_TURLERI.includes(p.izin) || !gecerli.includes(p.karar)) {

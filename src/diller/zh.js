@@ -50,6 +50,9 @@ module.exports = {
     'menu.digerAraclar': '更多工具',
     'menu.yakinlastirma': '缩放',
     'menu.veriSil': '删除浏览数据…',
+    'arac.onbellek': '重置缓存',
+    'arac.onbellekTemizlendi': '缓存已清除，页面已重新加载',
+    'arac.onbellekHata': '无法清除缓存',
     'arac.menu': '菜单',
 
     'baglam.baglantiYeniSekme': '在新标签页中打开链接',

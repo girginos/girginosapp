@@ -50,6 +50,9 @@ module.exports = {
     'menu.digerAraclar': 'More tools',
     'menu.yakinlastirma': 'Zoom',
     'menu.veriSil': 'Delete browsing data…',
+    'arac.onbellek': 'Reset cache',
+    'arac.onbellekTemizlendi': 'Cache cleared, page reloaded',
+    'arac.onbellekHata': 'Could not clear the cache',
     'arac.menu': 'Menu',
 
     'baglam.baglantiYeniSekme': 'Open link in new tab',

@@ -50,6 +50,9 @@ module.exports = {
     'menu.digerAraclar': 'その他のツール',
     'menu.yakinlastirma': 'ズーム',
     'menu.veriSil': '閲覧データを削除…',
+    'arac.onbellek': 'キャッシュをリセット',
+    'arac.onbellekTemizlendi': 'キャッシュを消去し、ページを再読み込みしました',
+    'arac.onbellekHata': 'キャッシュを消去できませんでした',
     'arac.menu': 'メニュー',
 
     'baglam.baglantiYeniSekme': 'リンクを新しいタブで開く',

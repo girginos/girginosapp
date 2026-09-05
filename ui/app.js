@@ -10,7 +10,8 @@ const el = {
   geri: $('btnGeri'), ileri: $('btnIleri'), yenile: $('btnYenile'), anasayfa: $('btnAnasayfa'),
   adresKutu: $('adresKutu'), adres: $('adres'), adresGoster: $('adresGoster'), kilit: $('kilit'),
   kalkan: $('btnKalkan'), engelSayi: $('engelSayi'), yerImi: $('btnYerImi'),
-  gecmis: $('btnGecmis'), indirmeler: $('btnIndirmeler'), ayarlar: $('btnAyarlar'),
+  gecmis: $('btnGecmis'), indirmeler: $('btnIndirmeler'),
+  onbellek: $('btnOnbellek'), ayarlar: $('btnAyarlar'),
   yerImleriCubugu: $('yerImleriCubugu'),
   oneriler: $('oneriler'),
   bulCubugu: $('bulCubugu'), bulGirdi: $('bulGirdi'), bulSayac: $('bulSayac'),
@@ -683,6 +684,27 @@ el.kilit.addEventListener('click', () => {
   const r = el.kilit.getBoundingClientRect();
   onerileriKapat();
   window.pusula.siteMenu({ sol: r.left, y: r.bottom + 6 });
+});
+
+/*
+ * Onbellegi sifirla: HTTP onbellegini bosaltip acik sayfayi onbelleksiz
+ * yeniden yukler. Kullanicilarin en sik takildigi sey eski surumu gormek.
+ * Dugme, isin bittigini kisa bir durum degisikligiyle soyluyor - sessizce
+ * hicbir sey olmamasi burada "calismiyor" diye okunurdu.
+ */
+el.onbellek.addEventListener('click', async () => {
+  if (el.onbellek.disabled) return;
+  el.onbellek.disabled = true;
+  el.onbellek.classList.add('calisiyor');
+  const oldu = await window.pusula.onbellekTemizle();
+  el.onbellek.classList.remove('calisiyor');
+  el.onbellek.classList.toggle('tamam', !!oldu);
+  el.onbellek.title = cev(oldu ? 'arac.onbellekTemizlendi' : 'arac.onbellekHata');
+  setTimeout(() => {
+    el.onbellek.classList.remove('tamam');
+    el.onbellek.disabled = false;
+    el.onbellek.title = cev('arac.onbellek');
+  }, 1600);
 });
 
 el.gecmis.addEventListener('click', () => panelAc('gecmis'));
