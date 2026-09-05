@@ -1087,26 +1087,77 @@ function oturumKur() {
     })
   });
 
+  /*
+   * Kayıtlı karar + genel varsayılandan tek bir cevap üretir. Hem istek
+   * işleyicisi hem de senkron denetim işleyicisi bunu kullanıyor; ikisi ayrı
+   * yazılırsa zamanla farklı cevap verirler.
+   * Döner: 'izin' | 'ret' | 'sor'
+   */
+  function izinKarari(origin, izin) {
+    const kayitli = store.izinOku(origin, izin);
+    if (kayitli) return kayitli;
+    return (store.ayarlar.izinVarsayilan || {})[izin] || 'sor';
+  }
+
+  function istekOrigini(wc, ayrinti) {
+    try {
+      const u = new URL((ayrinti && ayrinti.requestingUrl) || wc.getURL());
+      // data:, blob:, about: gibi opak kaynaklar origin olarak "null" döndürür.
+      if (u.protocol !== 'https:' && u.protocol !== 'http:') return null;
+      return u.origin;
+    } catch { return null; }
+  }
+
+  /*
+   * Senkron izin DENETİMİ. navigator.permissions.query(), medya aygıtı
+   * sıralaması gibi yerler buradan geçiyor ve bu kapı bugüne kadar hiç
+   * bağlanmamıştı: Electron'un varsayılanı her şeye TRUE döner, yani site
+   * "izinliyim" cevabını alıp gerçek istek reddedilene kadar öyle davranıyordu.
+   *
+   * Sınırı olduğu gibi yazalım: bu işleyici SENKRON ve boolean döner, yani
+   * kullanıcıya soramaz. 'sor' durumunda "henüz verilmedi" anlamında false
+   * dönüyoruz; bunun bedeli permissions.query()'nin 'prompt' yerine 'denied'
+   * demesi. Alternatifi (true dönmek) siteye yalan söylemek olurdu.
+   */
+  ses.setPermissionCheckHandler((wc, izin, kaynakOrigin, ayrinti) => {
+    const origin = kaynakOrigin && /^https?:/.test(kaynakOrigin)
+      ? kaynakOrigin
+      : istekOrigini(wc || {}, ayrinti);
+    if (!origin) return false;
+    return izinKarari(origin, izin) === 'izin';
+  });
+
+  /*
+   * WebUSB / WebHID / Web Serial aygıt seçimi. Bağlanmamışken Electron
+   * varsayılanı reddediyor ama bunu açıkça yazıyoruz: aygıt erişimi bu
+   * tarayıcının vermediği bir yetki ve sessiz varsayılana güvenmek istemiyoruz.
+   */
+  ses.setDevicePermissionHandler(() => false);
+
+  /*
+   * Ekran paylaşımı (getDisplayMedia). Bağlanmamışken Electron kendi
+   * seçicisini gösterebiliyor; biz kaynak seçtirmeden reddediyoruz.
+   * Küçük resimli bir pencere/ekran seçici yazılana kadar bu kapı kapalı:
+   * yarım bir seçici, kullanıcının hangi pencereyi paylaştığını görmeden
+   * onaylaması demek olurdu.
+   */
+  ses.setDisplayMediaRequestHandler((_istek, callback) => {
+    callback({});   // kaynak yok -> paylaşım başlamaz
+  });
+
   ses.setPermissionRequestHandler(async (wc, izin, callback, ayrinti) => {
     // Yalnızca kullanıcının o an baktığı sekme izin isteyebilir; arka plandaki
     // bir sekme, öndeki siteye aitmiş gibi görünen bir kutu açamasın.
     const s = aktifSekme();
     if (!s || s.view.webContents.isDestroyed() || s.view.webContents.id !== wc.id) return callback(false);
 
-    let u;
-    try { u = new URL((ayrinti && ayrinti.requestingUrl) || wc.getURL()); } catch { return callback(false); }
-    // data:, blob:, about: gibi opak kaynaklar origin olarak "null" döndürür;
-    // kaydedilirse tüm siteler için ortak bir izin kovası oluşurdu.
-    if (u.protocol !== 'https:' && u.protocol !== 'http:') return callback(false);
-    const origin = u.origin;
+    const origin = istekOrigini(wc, ayrinti);
+    if (!origin) return callback(false);
 
-    // 1) Bu site için daha önce verilmiş karar
-    const kayitli = store.izinOku(origin, izin);
-    if (kayitli) return callback(kayitli === 'izin');
-
-    // 2) Ayarlar'daki genel varsayılan; 'sor' değilse kutu hiç açılmaz.
-    const varsayilan = (store.ayarlar.izinVarsayilan || {})[izin] || 'sor';
-    if (varsayilan !== 'sor') return callback(varsayilan === 'izin');
+    // Karar senkron denetim kapısıyla ORTAK: ikisi ayrı yazılırsa zamanla
+    // farklı cevap verir ve site "izinliyim" deyip reddedilir.
+    const karar = izinKarari(origin, izin);
+    if (karar !== 'sor') return callback(karar === 'izin');
 
     // 3) Kullanıcıya sor
     if (izinOnayAcik) return callback(false);

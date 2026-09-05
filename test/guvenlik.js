@@ -180,6 +180,27 @@ esit('sadece nokta yedeğe düşer', indirmeAdiNormalle('...'), 'dosya');
     b.engellensinMi({ url: 'https://criteo.com/x', resourceType: 'mainFrame', webContentsId: 1 }), false);
 }
 
+/* ---- izin kapıları bağlı mı ---- */
+/*
+ * Bu üç kapı uzun süre HİÇ bağlanmamıştı ve bağlanmadıklarında Electron'un
+ * varsayılanı sessizce devreye giriyor: setPermissionCheckHandler yoksa her
+ * denetim TRUE döner, yani site "izinliyim" cevabı alır. Kaybolmaları hata
+ * vermediği için mekanik olarak denetleniyor.
+ */
+{
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const kaynak = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8');
+  for (const kapi of [
+    'setPermissionRequestHandler',
+    'setPermissionCheckHandler',
+    'setDevicePermissionHandler',
+    'setDisplayMediaRequestHandler'
+  ]) {
+    esit(kapi + ' bağlı', kaynak.includes('ses.' + kapi + '('), true);
+  }
+}
+
 /* ---- sonuç ---- */
 
 if (hatalar.length) {
@@ -187,4 +208,5 @@ if (hatalar.length) {
   for (const h of hatalar) console.error('  ✗ ' + h + '\n');
   process.exit(1);
 }
+
 console.log('✓ güvenlik: ' + gecen + ' saldırı vektörünün hepsi karşılandı.');
