@@ -74,7 +74,37 @@ const htmlId = topla(html, /id="([^"]+)"/g);
 const katmanOnKanallar = topla(main, /katmanOn\('([^']+)'/g);
 const duzOnKanallar = topla(main, /(?:^|[^.\w])on\('([^']+)'/gm);
 
+/*
+ * Test dosyalarında sonuç kontrolünden SONRA kalan iddialar sessizce
+ * yok sayılır: hatalar dizisine yazarlar ama dizi çoktan kontrol edilmiştir,
+ * yani başarısız olsalar bile özet "hepsi geçti" der. Bu tuzağa üç kez
+ * düşüldü; artık mekanik olarak denetleniyor.
+ */
+const testDosyalari = ['test/dogrula.js', 'test/guvenlik.js', 'test/guncelleme.js'];
+const olusuzIddialar = [];
+for (const t of testDosyalari) {
+  const metin = oku(t);
+  const i = metin.indexOf('if (hatalar.length)');
+  if (i < 0) { olusuzIddialar.push(t + ' (sonuç kontrolü bulunamadı)'); continue; }
+  const sonrasi = metin.slice(i);
+  const sayi = (sonrasi.match(/esit\(/g) || []).length;
+  if (sayi > 0) olusuzIddialar.push(t + ' (' + sayi + ' iddia sonuç kontrolünden sonra)');
+}
+
+// Ham kontrol karakteri kaynakta durmamalı: grep dosyayı ikili sayıyor,
+// editörler sessizce siliyor.
+const hamKontrol = [];
+for (const t of [...testDosyalari, 'main.js', 'ui/app.js']) {
+  const say = [...oku(t)].filter((c) => {
+    const k = c.codePointAt(0);
+    return k < 9 || (k > 13 && k < 32);
+  }).length;
+  if (say) hamKontrol.push(t + ' (' + say + ')');
+}
+
 const denetimler = [
+  ['sonuç kontrolünden sonra iddia', olusuzIddialar],
+  ['kaynakta ham kontrol karakteri', hamKontrol],
   ['katman kanalı arayüz kapısında (sessizce düşer)',
     [...duzOnKanallar].filter((k) => k.startsWith('katman:'))],
   ['katman:* kanalı katmanOn ile kayıtlı değil',

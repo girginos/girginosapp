@@ -182,13 +182,6 @@ for (const [a, b, beklenen] of surumTestleri) {
 
 /* ---- sonuç ---- */
 
-if (hatalar.length) {
-  console.error('\nBAŞARISIZ (' + hatalar.length + '):\n');
-  for (const h of hatalar) console.error('  ✗ ' + h + '\n');
-  process.exit(1);
-}
-console.log('✓ güncelleme doğrulaması: ' + gecen + ' testin hepsi geçti.');
-
 /* ---- kurulum sessiz mi ---- */
 /*
  * Sessiz kurulum bir tercih değil, davranışın kendisi: kullanıcı uygulama
@@ -216,3 +209,10 @@ console.log('✓ güncelleme doğrulaması: ' + gecen + ' testin hepsi geçti.')
   esit('sessiz kurulum', cagrilar[0][0], true);
   esit('kurulumdan sonra yeniden açılır', cagrilar[0][1], true);
 }
+
+if (hatalar.length) {
+  console.error('\nBAŞARISIZ (' + hatalar.length + '):\n');
+  for (const h of hatalar) console.error('  ✗ ' + h + '\n');
+  process.exit(1);
+}
+console.log('✓ güncelleme doğrulaması: ' + gecen + ' testin hepsi geçti.');

@@ -254,6 +254,36 @@ class Store {
     return this.veri.izinler[origin] && this.veri.izinler[origin][izinAdi];
   }
 
+  /*
+   * Site izin duvarı için üç durumlu ayar. 'sor' kaydı SİLER: kayıt yokluğu
+   * zaten "genel varsayılana dön" demek. Ayrı bir 'sor' değeri saklamak,
+   * varsayılan sonradan değişince kullanıcının hiç vermediği bir kararı
+   * dondurmuş olurdu.
+   */
+  izinAyarla(origin, izinAdi, karar) {
+    if (karar === 'sor') {
+      if (this.veri.izinler[origin]) {
+        delete this.veri.izinler[origin][izinAdi];
+        if (!Object.keys(this.veri.izinler[origin]).length) delete this.veri.izinler[origin];
+        this.kaydet();
+      }
+      return true;
+    }
+    if (karar !== 'izin' && karar !== 'ret') return false;
+    this.izinKaydet(origin, izinAdi, karar);
+    return true;
+  }
+
+  // Bir sitenin hatırlanan bütün kararları.
+  izinlerOku(origin) {
+    return { ...(this.veri.izinler[origin] || {}) };
+  }
+
+  // Kayıtlı kararı olan siteler; izin duvarı listesinde gösteriliyor.
+  izinliOriginler() {
+    return Object.keys(this.veri.izinler).sort();
+  }
+
   izinVarsayilanAyarla(izinAdi, karar) {
     this.veri.ayarlar.izinVarsayilan[izinAdi] = karar;
     this.kaydet();
