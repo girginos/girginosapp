@@ -237,6 +237,10 @@ function boyutMetni(bayt) {
   return (i === 0 ? n : n.toFixed(1)) + ' ' + birim[i];
 }
 
+// Arayüzün ölçüp bildirdiği çapa noktaları. İzin kutusu bir tıklamayla
+// açılmadığı için konumunu tıklama anında ölçemiyoruz.
+let arayuzOlculeri = {};
+
 let katmanGorunum = null;
 let katmanHazirMi = false;
 let katmanBekleyenIcerik = null;
@@ -278,7 +282,11 @@ function katmanGoster(icerik) {
   // arada yeni sekme açıldıysa onun görünümü sonradan eklenmiş olurdu.
   try { win.contentView.removeChildView(g); } catch { /* ekli değildi */ }
   win.contentView.addChildView(g);
-  g.setBounds({ x: 0, y: chromeYukseklik, width, height: Math.max(0, height - chromeYukseklik) });
+  // Katman TÜM pencereyi kaplıyor. Yalnızca sayfa alanını kaplasaydı kutu en
+  // yukarı chrome'un altından başlayabilirdi; yer imleri çubuğu araya girince
+  // düğmeyle kutu arasında boşluk kalıyordu. Artık kutu, düğmenin alt kenarına
+  // yerel menülerle aynı şekilde çapalanıyor.
+  g.setBounds({ x: 0, y: 0, width, height });
 
   if (katmanHazirMi) katmanGorunum.webContents.send('katman:icerik', icerik);
   else katmanBekleyenIcerik = icerik;      // sayfa yüklenince gönderilecek
@@ -303,9 +311,7 @@ function katmanAcikMi() {
 function yerlesimGuncelle() {
   if (!win || win.isDestroyed()) return;
   const { width, height } = win.getContentBounds();
-  if (katmanAcikMi()) {
-    katmanGorunum.setBounds({ x: 0, y: chromeYukseklik, width, height: Math.max(0, height - chromeYukseklik) });
-  }
+  if (katmanAcikMi()) katmanGorunum.setBounds({ x: 0, y: 0, width, height });
   const y = katmanAcik ? height : chromeYukseklik;
   for (const t of sekmeler.values()) {
     if (t.view.webContents.isDestroyed()) continue;
@@ -1171,8 +1177,8 @@ function oturumKur() {
         katmanGoster({
           tur: 'izin',
           yon: 'sol',
-          ust: 6,
-          kenar: 8,
+          ust: (arayuzOlculeri.kilitAlt || chromeYukseklik) + 2,
+          kenar: Math.max(6, Math.round(arayuzOlculeri.kilitSol || 8)),
           genislik: 340,
           baslik: cev('dialog.izinBaslik'),
           kaynak: origin,
@@ -1359,6 +1365,13 @@ function ipcKur() {
     if (!Number.isFinite(px)) return;
     const yeni = Math.max(40, Math.min(2000, Math.round(px)));
     if (yeni !== chromeYukseklik) { chromeYukseklik = yeni; yerlesimGuncelle(); }
+  });
+
+  // Arayüz, çapa noktalarını chrome yeniden boyutlanınca bildiriyor.
+  on('ui:olcu', (_e, o) => {
+    if (!o || typeof o !== 'object') return;
+    const sayi = (v) => (Number.isFinite(v) ? Math.round(v) : null);
+    arayuzOlculeri = { kilitSol: sayi(o.kilitSol), kilitAlt: sayi(o.kilitAlt) };
   });
 
   on('ui:katman', (_e, acik) => {
@@ -1561,7 +1574,8 @@ function ipcKur() {
     katmanGoster({
       tur: 'indirmeler',
       yon: 'sag',
-      ust: 6,
+      // Düğmenin alt kenarı; yerel menülerin kullandığı çapanın aynısı.
+      ust: Math.max(0, Math.round((konum && konum.y) || chromeYukseklik)),
       kenar: Math.max(6, Math.round((konum && konum.sagKenar) || 8)),
       genislik,
       baslik: cev('panel.indirilenler'),

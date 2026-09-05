@@ -183,7 +183,10 @@ const yukseklikGozcusu = new ResizeObserver(() => {
 yukseklikGozcusu.observe(el.chrome);
 
 // Adres kutusu genişleyip daralınca öneri listesi hizasını kaybetmesin.
-new ResizeObserver(() => { if (!el.oneriler.hidden) oneriHizala(); }).observe(el.adresKutu);
+new ResizeObserver(() => {
+  if (!el.oneriler.hidden) oneriHizala();
+  olculeriBildir();
+}).observe(el.adresKutu);
 
 /* ---------------- çizim ---------------- */
 
@@ -701,7 +704,16 @@ const indirmeDurumu = (d) => cev('indirme.' + d);
 function indirmeMenusuAc() {
   const r = el.indirmeler.getBoundingClientRect();
   const sagKenar = Math.max(0, document.documentElement.clientWidth - r.right);
-  window.pusula.indirmeMenu({ sagKenar });
+  // Yerel menülerle aynı çapa: düğmenin alt kenarı.
+  window.pusula.indirmeMenu({ sagKenar, y: r.bottom + 2 });
+}
+
+// İzin kutusu bir tıklamayla açılmadığı için kilidin konumunu önceden
+// bildiriyoruz; chrome yeniden boyutlandıkça tazeleniyor.
+function olculeriBildir() {
+  const k = el.kilit.getBoundingClientRect();
+  if (!k.width && !k.height) return;
+  window.pusula.olcuBildir({ kilitSol: k.left, kilitAlt: k.bottom });
 }
 
 /* ---------------- sayfada bul ---------------- */

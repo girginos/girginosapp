@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld('pusula', {
   hazir: () => ipcRenderer.send('ui:hazir'),
   yukseklikBildir: (px) => ipcRenderer.send('ui:yukseklik', px),
   katmanBildir: (acik) => ipcRenderer.send('ui:katman', acik),
+  olcuBildir: (o) => ipcRenderer.send('ui:olcu', o),
 
   // Sekmeler
   yeniSekme: (url) => ipcRenderer.send('sekme:yeni', url),
