@@ -55,6 +55,16 @@ const SAYFA = '<!doctype html><meta charset="utf-8"><title>AA</title>'
   + 'window.__setResult2 = (window.__pusulaTestSabit === true);\n'
   + 'try { var g = window.__pusulaGizli; window.__aopr = "okundu"; }\n'
   + 'catch (e) { window.__aopr = "throw"; }\n'
+  // Tembel zincir: nesne ENJEKSIYONDAN SONRA olusuyor (YouTube ytInitialPlayerResponse gibi).
+  + 'window.__pusulaLazy = { playerAds: ["reklam"], adPlacements: ["preroll"], baslik: "video" };\n'
+  + 'window.__lazyAds = window.__pusulaLazy.playerAds;\n'          // undefined olmali
+  + 'window.__lazyPlace = window.__pusulaLazy.adPlacements;\n'     // undefined olmali (cakisma testi)
+  + 'window.__lazyBaslik = window.__pusulaLazy.baslik;\n'          // "video" korunmali
+  // addEventListener-defuser: reklam dinleyicisi eklenmemeli, mesru olan calismali.
+  + 'window.__reklamCalisti = false; window.__mesruCalisti = false;\n'
+  + 'document.addEventListener("click", function pusulaReklamDinleyici(){ window.__reklamCalisti = true; });\n'
+  + 'document.addEventListener("click", function mesruDinleyici(){ window.__mesruCalisti = true; });\n'
+  + 'document.dispatchEvent(new Event("click"));\n'
   + '</script>';
 
 const sunucu = http.createServer((_q, r) => {
@@ -130,7 +140,14 @@ function kapat(cocuk) {
   [
     '127.0.0.1##+js(acs, navigator.userAgent, AdBlockOn)',
     '127.0.0.1##+js(set-constant, __pusulaTestSabit, true)',
-    '127.0.0.1##+js(aopr, __pusulaGizli)'
+    '127.0.0.1##+js(aopr, __pusulaGizli)',
+    // Tembel zincir: nesne enjeksiyondan SONRA oluşuyor (YouTube senaryosu).
+    // AYNI nesneye İKİ set kuralı (YouTube'da playerAds+adPlacements+adSlots gibi):
+    // ikisi de tuzağa düşmeli - çarpışma olmamalı.
+    '127.0.0.1##+js(set, __pusulaLazy.playerAds, undefined)',
+    '127.0.0.1##+js(set, __pusulaLazy.adPlacements, undefined)',
+    // addEventListener-defuser: reklam dinleyicisi eklenmemeli.
+    '127.0.0.1##+js(aeld, click, pusulaReklamDinleyici)'
   ].forEach((s) => depo.ekle(betikCoz(s)));
 
   fs.mkdirSync(path.join(profil, 'listeler'), { recursive: true });
@@ -178,6 +195,20 @@ function kapat(cocuk) {
     // aopr: korunan özelliğin okunması hata fırlattı.
     bak('aopr - korunan özellik okununca throw',
       await cdp(ws, 'window.__aopr').catch(() => null), 'throw');
+
+    // set-constant TEMBEL ZİNCİR: nesne sonradan oluşsa da reklam alanı boş (YouTube fix).
+    bak('set tembel zincir - sonradan oluşan nesnede reklam undefined',
+      await cdp(ws, 'window.__lazyAds === undefined').catch(() => null), true);
+    bak('set tembel zincir - AYNI nesnede 2. kural da undefined (çakışma yok)',
+      await cdp(ws, 'window.__lazyPlace === undefined').catch(() => null), true);
+    bak('set tembel zincir - cerrahi (diğer alan korundu)',
+      await cdp(ws, 'window.__lazyBaslik').catch(() => null), 'video');
+
+    // addEventListener-defuser: reklam dinleyicisi eklenmedi, meşru olan çalıştı.
+    bak('aeld - reklam dinleyicisi etkisizleştirildi',
+      await cdp(ws, 'window.__reklamCalisti').catch(() => null), false);
+    bak('aeld - meşru dinleyici çalıştı',
+      await cdp(ws, 'window.__mesruCalisti').catch(() => null), true);
   }
 
   await kapat(cocuk);

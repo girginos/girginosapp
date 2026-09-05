@@ -22,9 +22,24 @@ const { BetikDepo, betikCoz, yerleşikDepo } = require('./betikler');
  * sayfaya CSS olarak uygulanıyorlar.
  */
 
+/*
+ * Varsayılan listeler uBlock Origin'in etkinleştirdiği çekirdek kümeyi
+ * yansıtıyor. EasyList/EasyPrivacy ağ + kozmetik tarafını taşıyor; uBO'nun kendi
+ * listeleri asıl SCRIPTLET gücünü (anti-adblock, YouTube, reklam scriptleri -
+ * ~3000 kural) ve gelişmiş kozmetikleri getiriyor. AdGuard Türkçe, r10.net gibi
+ * yerel siteleri kapsıyor. uBO listeleri "güvenilir": trusted-* scriptlet'ler
+ * (yanıt gövdesini yeniden yazan) yalnızca bunlardan çalışır.
+ */
 const VARSAYILAN_LISTELER = [
   { id: 'easylist', ad: 'EasyList', aciklama: 'Reklamlar', url: 'https://easylist.to/easylist/easylist.txt' },
-  { id: 'easyprivacy', ad: 'EasyPrivacy', aciklama: 'İzleyiciler', url: 'https://easylist.to/easylist/easyprivacy.txt' }
+  { id: 'easyprivacy', ad: 'EasyPrivacy', aciklama: 'İzleyiciler', url: 'https://easylist.to/easylist/easyprivacy.txt' },
+  { id: 'ublock-filters', ad: 'uBlock filtreleri — Reklamlar', aciklama: 'Scriptlet + kozmetik', url: 'https://ublockorigin.github.io/uAssets/filters/filters.txt' },
+  { id: 'ublock-privacy', ad: 'uBlock filtreleri — Gizlilik', aciklama: 'İzleyici scriptletleri', url: 'https://ublockorigin.github.io/uAssets/filters/privacy.txt' },
+  { id: 'ublock-badware', ad: 'uBlock filtreleri — Zararlı', aciklama: 'Kötü amaçlı siteler', url: 'https://ublockorigin.github.io/uAssets/filters/badware.txt' },
+  { id: 'ublock-quickfixes', ad: 'uBlock filtreleri — Hızlı düzeltmeler', aciklama: 'YouTube dahil güncel yamalar', url: 'https://ublockorigin.github.io/uAssets/filters/quick-fixes.txt' },
+  { id: 'ublock-resourceabuse', ad: 'uBlock filtreleri — Kaynak istismarı', aciklama: 'Anti-adblock, madenciler', url: 'https://ublockorigin.github.io/uAssets/filters/resource-abuse.txt' },
+  { id: 'ublock-unbreak', ad: 'uBlock filtreleri — Onarım', aciklama: 'Aşırı engellemeyi düzeltir', url: 'https://ublockorigin.github.io/uAssets/filters/unbreak.txt' },
+  { id: 'adguard-turkce', ad: 'AdGuard Türkçe', aciklama: 'Türk siteleri (r10.net vb.)', url: 'https://filters.adtidy.org/extension/ublock/filters/13.txt' }
 ];
 
 const EN_BUYUK_BAYT = 16 * 1024 * 1024;
@@ -94,7 +109,7 @@ function alanCapasiCoz(govde) {
  * Bir filtre listesi metnini ayrıştırır.
  * Adblock Plus, hosts ve düz alan adı biçimlerini tanır.
  */
-function ayristir(metin) {
+function ayristir(metin, guvenilir = false) {
   const alanlar = new Set();
   const istisnalar = new Set();
   const kozmetik = new KozmetikDepo();
@@ -138,7 +153,7 @@ function ayristir(metin) {
        */
       if (satir.includes('+js(')) {
         const b = betikCoz(satir);
-        if (b) { betik.ekle(b); toplamKural++; continue; }
+        if (b) { betik.ekle(b, guvenilir); toplamKural++; continue; }
       } else {
         const k = kuralCoz(satir);
         if (k) { kozmetik.ekle(k); toplamKural++; continue; }
@@ -407,7 +422,9 @@ class ListeYoneticisi {
       if (y.durum !== 200) throw new Error('HTTP ' + y.durum);
       if (y.metin.length > EN_BUYUK_BAYT) throw new Error('liste çok büyük');
 
-      const c = ayristir(y.metin);
+      // Varsayılan listeler güvenilir; kullanıcının eklediği (ozel) listeler değil.
+      // trusted-* scriptlet'ler yalnızca güvenilir listelerden çalışır.
+      const c = ayristir(y.metin, !tanim.ozel);
       /*
        * "Liste tanındı mı" sınavı kozmetik kuralları da sayıyor. Yalnızca ağ
        * kurallarına bakmak, tamamı kozmetik olan listeleri (bunlar yaygın)

@@ -731,6 +731,21 @@ esit('her kayıt geçerli alan adı biçiminde', LISTE.filter(d => !ALAN_BICIMI.
   du.ekle(betikCoz('##+js(bilinmeyen-scriptlet, x)'));
   esit('desteklenmeyen scriptlet depoya girmez', du.sayı, 0);
 
+  // Güven modeli: trusted-* yalnızca güvenilir listeden çalışır
+  const dg = new BetikDepo();
+  dg.ekle(betikCoz('ornek.com##+js(trusted-replace-fetch-response, a, b)'), false);
+  esit('güvenilmeyen listeden trusted scriptlet düşer', dg.sayı, 0);
+  dg.ekle(betikCoz('ornek.com##+js(trusted-replace-fetch-response, a, b)'), true);
+  esit('güvenilir listeden trusted scriptlet girer', dg.sayı, 1);
+  // Normal scriptlet güvenilmeyen listeden de girer
+  const dn = new BetikDepo();
+  dn.ekle(betikCoz('ornek.com##+js(nowebrtc)'), false);
+  esit('normal scriptlet güvenilmeyen listeden girer', dn.sayı, 1);
+
+  // .js eki soyulur, tembel-zincir takma adları çözülür
+  esit('kanonik .js ekini soyar', kanonik('aeld.js'), 'addEventListener-defuser');
+  esit('kanonik nowoif', kanonik('nowoif'), 'no-window-open-if');
+
   // Aynı kural iki kez -> tek çalıştırma
   const dd = new BetikDepo();
   dd.ekle(betikCoz('##+js(nowebrtc)'));

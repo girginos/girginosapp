@@ -104,18 +104,74 @@ function aopw(H, zincir) {
 }
 
 // set-constant / set
+/*
+ * TEMBEL ZİNCİR. "ytInitialPlayerResponse.playerAds" gibi bir zincirde ara
+ * nesne enjeksiyon anında HENÜZ YOKTUR (sayfa script'i sonra oluşturur). Eski
+ * sürüm zinciri hevesle yürüyüp ara nesne yoksa pes ediyordu; YouTube'da hiçbir
+ * şey yapmıyordu. Şimdi ara segmentlere setter konuyor: sayfa o nesneyi
+ * atadığında araya girip son özelliği sabitliyoruz - reklam verisi okunduğunda
+ * sabit dönüyor. uBO'nun yaklaşımı.
+ */
 function setConstant(H, zincir, hamDeğer) {
   if (!zincir) return;
   var değer = H.sabit(hamDeğer);
   if (değer === H.GEÇERSİZ) return;
-  var sahip = window, parçalar = String(zincir).split('.'), özellik = parçalar.pop();
-  for (var i = 0; i < parçalar.length; i++) { sahip = sahip[parçalar[i]]; if (sahip == null) return; }
-  try {
-    Object.defineProperty(sahip, özellik, {
-      get: function () { return değer; },
-      set: function () { /* sabit tutuluyor */ }, configurable: true
-    });
-  } catch (e) { /* geç */ }
+  var parçalar = String(zincir).split('.');
+
+  function sabitle(sahip, özellik) {
+    try {
+      var d = Object.getOwnPropertyDescriptor(sahip, özellik);
+      if (d && d.get && d.get.__pusula) return;         // zaten kurulu
+      var g = function () { return değer; };
+      g.__pusula = true;
+      Object.defineProperty(sahip, özellik, {
+        get: g, set: function () { /* sabit */ }, configurable: true
+      });
+    } catch (e) { /* geç */ }
+  }
+
+  function uygula(sahip, i) {
+    if (sahip == null) return;
+    var özellik = parçalar[i];
+    if (i === parçalar.length - 1) { sabitle(sahip, özellik); return; }
+
+    var mevcut = sahip[özellik];
+    if (mevcut != null && (typeof mevcut === 'object' || typeof mevcut === 'function')) {
+      uygula(mevcut, i + 1);                              // ara nesne zaten var
+      return;
+    }
+    // Ara nesne yok: atandığı anda araya gir.
+    var devam = function (v) { uygula(v, i + 1); };
+    try {
+      var d = Object.getOwnPropertyDescriptor(sahip, özellik);
+      if (d && d.set && d.set.__pusulaAra) {
+        /*
+         * BU (sahip, özellik) için ara setter ZATEN var (aynı nesneye başka bir
+         * set kuralı - ör. ytInitialPlayerResponse.playerAds + .adPlacements +
+         * .adSlots). Erken çıkarsak yalnız ilk kural işler; onun yerine devam
+         * işlevimizi ekliyoruz. Değer atanmışsa hemen uygula.
+         */
+        d.set.__devam.push(devam);
+        if (d.get && d.get.__deger != null) devam(d.get.__deger);
+        return;
+      }
+      var saklanan = mevcut;
+      var devamlar = [devam];
+      var g = function () { return saklanan; };
+      g.__deger = saklanan;
+      var st = function (v) {
+        saklanan = v; g.__deger = v;
+        if (v != null && (typeof v === 'object' || typeof v === 'function')) {
+          for (var k = 0; k < devamlar.length; k++) { try { devamlar[k](v); } catch (e) { /* geç */ } }
+        }
+      };
+      st.__pusulaAra = true;
+      st.__devam = devamlar;
+      Object.defineProperty(sahip, özellik, { get: g, set: st, configurable: true });
+    } catch (e) { /* geç */ }
+  }
+
+  uygula(window, 0);
 }
 
 // no-setInterval-if / nosiif / setInterval-defuser
@@ -160,8 +216,10 @@ function noSetTimeoutIf(H, iğne, hamGecikme) {
 
 // json-prune
 function jsonPrune(H, hamBudanacak, hamİğne) {
-  var budanacak = String(hamBudanacak || '').split(/\s+/).filter(Boolean);
-  var iğneler = String(hamİğne || '').split(/\s+/).filter(Boolean);
+  // "important" bir yol değil, uBO değiştiricisi; ayıkla (yoksa yol sanılır).
+  var atla = { important: 1 };
+  var budanacak = String(hamBudanacak || '').split(/\s+/).filter(function (p) { return p && !atla[p]; });
+  var iğneler = String(hamİğne || '').split(/\s+/).filter(function (p) { return p && !atla[p]; });
   if (!budanacak.length) return;
   var buda = function (o) {
     if (!o || typeof o !== 'object') return o;
@@ -245,6 +303,215 @@ function nowebrtc(H) {
   } catch (e) { /* geç */ }
 }
 
+// addEventListener-defuser / aeld
+function aeld(H, tur, desen) {
+  var reTur = H.re(tur), reDesen = H.re(desen);
+  var orij = EventTarget.prototype.addEventListener;
+  if (typeof orij !== 'function') return;
+  EventTarget.prototype.addEventListener = function (t, dinleyici, sec) {
+    try {
+      var kaynak = '';
+      try {
+        kaynak = (typeof dinleyici === 'function') ? dinleyici.toString()
+          : (dinleyici && dinleyici.handleEvent ? String(dinleyici.handleEvent) : String(dinleyici));
+      } catch (e) { /* geç */ }
+      var mTur = reTur ? reTur.test(String(t)) : true;
+      var mDesen = reDesen ? reDesen.test(kaynak) : true;
+      if (mTur && mDesen) return;   // dinleyici hiç eklenmez
+    } catch (e) { /* geç */ }
+    return orij.call(this, t, dinleyici, sec);
+  };
+}
+
+// no-window-open-if / nowoif
+function noWindowOpenIf(H, desen) {
+  var değil = false, d = desen;
+  if (d && d.charAt(0) === '!') { değil = true; d = d.slice(1); }
+  var re = H.re(d);
+  var orij = window.open;
+  if (typeof orij !== 'function') return;
+  function sahtePencere() {
+    var noop = function () {};
+    return {
+      closed: false, close: function () { this.closed = true; }, focus: noop, blur: noop,
+      postMessage: noop, moveTo: noop, resizeTo: noop,
+      document: { write: noop, writeln: noop, open: noop, close: noop },
+      location: { href: 'about:blank', assign: noop, replace: noop, reload: noop }
+    };
+  }
+  window.open = function (url) {
+    try {
+      var u = String(url || '');
+      var m = re ? re.test(u) : true;
+      if (değil) m = !m;
+      if (m) return sahtePencere();   // site dönen değeri kullanıyorsa kırılmasın
+    } catch (e) { /* geç */ }
+    return orij.apply(this, arguments);
+  };
+}
+
+// no-xhr-if
+function noXhrIf(H, hamKoşul) {
+  var koşullar = H.propKoşul(hamKoşul);
+  var Orij = window.XMLHttpRequest;
+  if (typeof Orij !== 'function') return;
+  function Sarmal() {
+    var xhr = new Orij();
+    var eşleşti = false;
+    var acOrij = xhr.open;
+    xhr.open = function (yöntem, url) {
+      try { eşleşti = H.fetchEşleşir(koşullar, String(url || ''), String(yöntem || 'GET')); }
+      catch (e) { eşleşti = false; }
+      return acOrij.apply(xhr, arguments);
+    };
+    var gonderOrij = xhr.send;
+    xhr.send = function () {
+      if (!eşleşti) return gonderOrij.apply(xhr, arguments);
+      // Eşleşti: gerçek istek gitmez, boş ama başarılı bir yanıt taklit edilir.
+      try {
+        Object.defineProperty(xhr, 'readyState', { value: 4, configurable: true });
+        Object.defineProperty(xhr, 'status', { value: 200, configurable: true });
+        Object.defineProperty(xhr, 'responseText', { value: '', configurable: true });
+        Object.defineProperty(xhr, 'response', { value: '', configurable: true });
+      } catch (e) { /* getter'lar sabit olabilir; yine de istek gitmedi */ }
+      var ateşle = function () {
+        try { if (typeof xhr.onreadystatechange === 'function') xhr.onreadystatechange(); } catch (e) { /* geç */ }
+        try { xhr.dispatchEvent(new Event('readystatechange')); } catch (e) { /* geç */ }
+        try { xhr.dispatchEvent(new Event('load')); } catch (e) { /* geç */ }
+        try { xhr.dispatchEvent(new Event('loadend')); } catch (e) { /* geç */ }
+      };
+      setTimeout(ateşle, 1);
+    };
+    return xhr;
+  }
+  Sarmal.prototype = Orij.prototype;
+  try { window.XMLHttpRequest = Sarmal; } catch (e) { /* geç */ }
+}
+
+// set-local-storage-item
+function setLocalStorageItem(H, anahtar, hamDeğer) {
+  if (!anahtar) return;
+  var değer = H.depoDeğeri(hamDeğer);
+  if (değer === H.GEÇERSİZ) return;
+  try {
+    if (değer === H.SIL) window.localStorage.removeItem(anahtar);
+    else window.localStorage.setItem(anahtar, değer);
+  } catch (e) { /* geç */ }
+}
+
+// href-sanitizer: izleme sarmalı bağlantıları gerçek adresine indir.
+function hrefSanitizer(H, seçici, kaynak) {
+  if (!seçici) return;
+  kaynak = kaynak || 'text';
+  function çöz(a) {
+    try {
+      var yeni = '';
+      if (kaynak === 'text') yeni = (a.textContent || '').trim();
+      else if (kaynak.charAt(0) === '?') { try { yeni = new URL(a.href).searchParams.get(kaynak.slice(1)) || ''; } catch (e) { /* geç */ } }
+      else if (kaynak.charAt(0) === '[') yeni = a.getAttribute(kaynak.slice(1, -1)) || '';
+      if (yeni && /^https?:\/\//i.test(yeni)) a.setAttribute('href', yeni);
+    } catch (e) { /* geç */ }
+  }
+  H.periyodik(function () {
+    var els; try { els = document.querySelectorAll(seçici); } catch (e) { return; }
+    for (var i = 0; i < els.length; i++) if (els[i].tagName === 'A') çöz(els[i]);
+  });
+}
+
+// cookie-remover / remove-cookie
+function cookieRemover(H, desen) {
+  var re = H.re(desen);
+  function sil() {
+    try {
+      var cs = document.cookie ? document.cookie.split(';') : [];
+      for (var i = 0; i < cs.length; i++) {
+        var ad = cs[i].split('=')[0].trim();
+        if (!ad || (re && !re.test(ad))) continue;
+        var alanlar = [location.hostname, '.' + location.hostname];
+        document.cookie = ad + '=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/';
+        for (var a = 0; a < alanlar.length; a++) {
+          document.cookie = ad + '=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/; domain=' + alanlar[a];
+        }
+      }
+    } catch (e) { /* geç */ }
+  }
+  sil();
+  try { window.addEventListener('load', sil); } catch (e) { /* geç */ }
+  try { var g = setInterval(sil, 1000); setTimeout(function () { clearInterval(g); }, 10000); } catch (e) { /* geç */ }
+}
+
+// noeval-if / noeval
+function noEvalIf(H, desen) {
+  var re = H.re(desen);
+  var orij = window.eval;
+  if (typeof orij !== 'function') return;
+  // Not: yalnızca window.eval(...) (dolaylı eval) sarılabilir; sayfanın kendi
+  // kapsamındaki doğrudan eval() etkilenmez - uBO'da da aynı sınır.
+  try {
+    window.eval = function (kod) {
+      try { if (re ? re.test(String(kod)) : true) return undefined; } catch (e) { /* geç */ }
+      return orij.apply(this, arguments);
+    };
+  } catch (e) { /* geç */ }
+}
+
+// remove-node-text / rmnt
+function removeNodeText(H, düğümAdı, desen) {
+  var reAd = H.re(düğümAdı);
+  var reDesen = H.re(desen);
+  function temizle() {
+    try {
+      if (!document.body) return;
+      var yürü = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, null);
+      var n, sil = [];
+      while ((n = yürü.nextNode())) {
+        var eb = n.parentNode;
+        if (!eb) continue;
+        if (reAd && !reAd.test(eb.nodeName)) continue;
+        if (reDesen && !reDesen.test(n.textContent)) continue;
+        sil.push(n);
+      }
+      for (var i = 0; i < sil.length; i++) sil[i].textContent = '';
+    } catch (e) { /* geç */ }
+  }
+  H.periyodik(temizle);
+}
+
+/*
+ * trusted-replace-fetch-response: eşleşen fetch YANITININ metninde desen->karşılık
+ * değiştirir. YouTube'un asıl güncel reklam yöntemi bu: player API yanıtındaki
+ * "adPlacements" -> "no_ads". "trusted" çünkü yanıt gövdesini yeniden yazar;
+ * yalnızca güvendiğimiz kaynaklardan (uBO resmi listeleri + yerleşik) geliyor.
+ */
+function trustedReplaceFetchResponse(H, hamDesen, karşılık, hamKoşul) {
+  var re = H.reGenel(hamDesen);
+  if (karşılık === undefined) karşılık = '';
+  var koşullar = H.propKoşul(hamKoşul);
+  var oF = window.fetch;
+  if (typeof oF !== 'function') return;
+  window.fetch = function (girdi, ayar) {
+    var url = '';
+    try { url = (typeof girdi === 'string') ? girdi : (girdi && girdi.url) || ''; } catch (e) { /* geç */ }
+    var yöntem = (ayar && ayar.method) || (girdi && girdi.method) || 'GET';
+    var uygun = true;
+    try { uygun = H.fetchEşleşir(koşullar, url, yöntem); } catch (e) { uygun = false; }
+    var p = oF.apply(this, arguments);
+    if (!uygun || !re) return p;
+    return p.then(function (yanıt) {
+      try {
+        return yanıt.clone().text().then(function (metin) {
+          var yeni;
+          try { yeni = metin.replace(re, karşılık); } catch (e) { return yanıt; }
+          if (yeni === metin) return yanıt;
+          var y2 = new Response(yeni, { status: yanıt.status, statusText: yanıt.statusText, headers: yanıt.headers });
+          try { Object.defineProperty(y2, 'url', { value: yanıt.url }); } catch (e) { /* geç */ }
+          return y2;
+        }).catch(function () { return yanıt; });
+      } catch (e) { return yanıt; }
+    });
+  };
+}
+
 /*
  * ORTAK YARDIMCI (H) - fabrika olarak yazılıyor ki ana dünyada çağrılıp taze bir
  * H üretsin. Buradaki her şey enjekte edilen demete gömülür.
@@ -253,6 +520,7 @@ function yardımcıFabrika() {
   'use strict';
   var H = {
     GEÇERSİZ: {},
+    SIL: {},          // set-local-storage-item için "$remove$" işareti
     _yutulan: null,
     re: function (s) {
       if (s === undefined || s === null || s === '') return null;
@@ -261,6 +529,30 @@ function yardımcıFabrika() {
         try { return new RegExp(s.slice(1, -1)); } catch (e) { return null; }
       }
       return new RegExp(s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+    },
+    // Bayrakları KORUYAN regex (trusted-replace için: /"adPlacements.../gms).
+    // Düz metin verilirse kaçırılıp yalnız ilk eşleşme değişir (uBO string davranışı).
+    reGenel: function (s) {
+      if (s === undefined || s === null || s === '') return null;
+      s = String(s);
+      var m = /^\/(.*)\/([a-z]*)$/s.exec(s);
+      if (m) { try { return new RegExp(m[1], m[2]); } catch (e) { return null; } }
+      try { return new RegExp(s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')); } catch (e) { return null; }
+    },
+    // set-local-storage-item değer eşlemesi.
+    depoDeğeri: function (ham) {
+      var s = String(ham);
+      if (s === '$remove$') return this.SIL;
+      switch (s) {
+        case 'true': case 'false': case 'yes': case 'no':
+        case 'on': case 'off': case '': return s;
+        case 'emptyArr': return '[]';
+        case 'emptyObj': return '{}';
+        case 'undefined': case 'null': return s;
+        default:
+          if (/^-?\d+(\.\d+)?$/.test(s)) return s;
+          return this.GEÇERSİZ;
+      }
     },
     rastgele: function () { return Math.floor(Math.random() * 1e9).toString(36) + Date.now().toString(36); },
     hatayıYut: function (büyü) {
@@ -357,7 +649,16 @@ const KİTAPLIK = {
   'remove-attr': removeAttr,
   'remove-class': removeClass,
   'no-fetch-if': noFetchIf,
-  'nowebrtc': nowebrtc
+  'nowebrtc': nowebrtc,
+  'addEventListener-defuser': aeld,
+  'no-window-open-if': noWindowOpenIf,
+  'no-xhr-if': noXhrIf,
+  'set-local-storage-item': setLocalStorageItem,
+  'href-sanitizer': hrefSanitizer,
+  'cookie-remover': cookieRemover,
+  'noeval-if': noEvalIf,
+  'remove-node-text': removeNodeText,
+  'trusted-replace-fetch-response': trustedReplaceFetchResponse
 };
 
 // uBO kısa adları / eş adları -> kanonik ad.
@@ -376,10 +677,27 @@ const TAKMA = {
   'std': 'no-setTimeout-if',
   'ra': 'remove-attr',
   'rc': 'remove-class',
-  'nowebrtc': 'nowebrtc'
+  'nowebrtc': 'nowebrtc',
+  'aeld': 'addEventListener-defuser',
+  'prevent-addEventListener': 'addEventListener-defuser',
+  'nowoif': 'no-window-open-if',
+  'window.open-defuser': 'no-window-open-if',
+  'noxhrif': 'no-xhr-if',
+  'prevent-xhr': 'no-xhr-if',
+  'sls': 'set-local-storage-item',
+  'remove-cookie': 'cookie-remover',
+  'cookie-remover': 'cookie-remover',
+  'noeval': 'noeval-if',
+  'prevent-eval-if': 'noeval-if',
+  'rmnt': 'remove-node-text',
+  'trusted-rpfr': 'trusted-replace-fetch-response'
 };
 
-function kanonik(ad) { return TAKMA[ad] || ad; }
+// Kanonik ad: ".js" eki soyulur (bazı listeler "aeld.js" yazıyor), sonra takma çözülür.
+function kanonik(ad) {
+  var t = String(ad || '').replace(/\.js$/, '');
+  return TAKMA[t] || t;
+}
 
 /* =========================================================================
  * 2) AYRIŞTIRICI - "[alanlar]##+js(ad, arg...)" / "[alanlar]#@#+js(...)"
@@ -479,7 +797,15 @@ class BetikDepo {
     return n;
   }
 
-  ekle(kural) {
+  /**
+   * @param {object} kural  betikCoz çıktısı
+   * @param {boolean} [guvenilir=true]  Liste güvenilir mi? "trusted-*" scriptlet'ler
+   *   yanıt gövdesini yeniden yazabildiği için YALNIZCA güvenilir (yerleşik +
+   *   varsayılan uBO) listelerden çalıştırılır; kullanıcının eklediği listelerden
+   *   gelirse sessizce atılır. Kötü niyetli bir özel liste trusted-replace ile
+   *   sayfa yanıtlarını kurcalamasın.
+   */
+  ekle(kural, guvenilir = true) {
     if (!kural) return;
     const { tip, alanlar, eksiler, ad, argümanlar } = kural;
 
@@ -494,8 +820,10 @@ class BetikDepo {
       return;
     }
 
-    if (!KİTAPLIK[kanonik(ad)]) return;   // desteklenmeyen scriptlet: sessizce atla
-    const giriş = { ad: kanonik(ad), argümanlar: argümanlar || [] };
+    const kanon = kanonik(ad);
+    if (!KİTAPLIK[kanon]) return;                       // desteklenmeyen scriptlet: sessizce atla
+    if (!guvenilir && kanon.indexOf('trusted-') === 0) return;  // güvenilmeyen listeden trusted scriptlet çalıştırma
+    const giriş = { ad: kanon, argümanlar: argümanlar || [] };
     if (eksiler && eksiler.length) giriş.eksiler = eksiler;
     if (!alanlar.length) { this.genel.push(giriş); return; }
     for (const d of alanlar) {
