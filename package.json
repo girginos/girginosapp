@@ -1,7 +1,7 @@
 {
   "name": "girginos-browser",
   "productName": "Girginos Browser",
-  "version": "0.4.4",
+  "version": "0.4.5",
   "description": "Girginos Browser — gizlilik odaklı web tarayıcısı",
   "main": "main.js",
   "author": "Girginos",
