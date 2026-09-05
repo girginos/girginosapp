@@ -589,9 +589,11 @@ function olaylariBagla(t) {
    * icin yapilan enjeksiyon o anda henuz var olmayan cerceveye
    * ulasmiyor; reklam cercevesi de zaten sayfadan sonra yukleniyor.
    */
-  wc.on('did-frame-navigate', (_e, _url, _kod, _metin, anaCerceve) => {
+  wc.on('did-frame-navigate', (e, _url, _kod, _metin, anaCerceve) => {
     if (anaCerceve) return;
-    altCerceveleriGiydir(wc, kozmetikCssAl(t.url));
+    // YALNIZCA yeni gezilen çerçeveyi giydir - tüm çerçeveleri değil (N*N patlaması).
+    const css = kozmetikCssAl(t.url);
+    if (css && e && e.frame) cerceveGiydir(e.frame, css);
   });
 
   wc.on('did-navigate-in-page', (_e, url, anaCerceve) => {
@@ -1033,28 +1035,41 @@ async function kozmetigiUygula(wc, url) {
 /*
  * ALT CERCEVELER.
  *
- * insertCSS yalnizca ANA cerceveye ulasiyor. Olculdu: ayni sayfadaki bir
- * iframe icinde ayni secici uygulanmiyordu. Yayincilar kendi reklamlarini ve
- * "reklam engelleyicinizi kapatin" seritlerini cogunlukla iframe'e koyuyor,
- * yani ozelligin kendi gerekcesindeki durum kapsam disi kaliyordu.
+ * insertCSS yalnizca ANA cerceveye ulasiyor. Yayincilar reklamlarini ve
+ * "reklam engelleyicinizi kapatin" seritlerini cogunlukla iframe'e koyuyor;
+ * kozmetik CSS o cercevelere de gitmeli. Stil, cercevenin kendi dunyasina bir
+ * <style> olarak ekleniyor (cerceve basina insertCSS yok).
  *
- * SINIR: cerceve basina insertCSS yok; stil, sayfanin kendi dunyasina bir
- * <style> olarak ekleniyor. Sayfa onu kaldirabilir. Ana cerceve icin hala
- * kullanici stil sayfasi kullaniliyor; bu yalnizca alt cerceveler icin.
+ * KRITIK PERFORMANS: did-frame-navigate HER alt cerceve gezindiginde tetikleniyor;
+ * eskiden her seferinde TUM cercevelere yeniden enjekte ediyorduk, yani N cerceveli
+ * sayfada N*N enjeksiyon (chromewebstore gibi onlarca Google iframe'i olan sayfada
+ * onlarca MB CSS + yuzlerce <style> -> renderer cokmesi, olculdu). Artik
+ * did-frame-navigate YALNIZ yeni gezilen cerceveyi giydiriyor; did-navigate ise
+ * mevcut cerceveleri BIR KEZ, sinirli sayida giydiriyor.
  */
+const EN_COK_ALT_CERCEVE = 12;
+
+function cerceveGiydir(cerceve, css) {
+  if (!css || !cerceve) return;
+  try { if (cerceve.url && !/^https?:/i.test(cerceve.url)) return; } catch { return; }
+  const kod = '(() => { try { const s = document.createElement("style");'
+    + ' s.textContent = ' + JSON.stringify(css) + ';'
+    + ' (document.head || document.documentElement).appendChild(s); } catch (e) {} })()';
+  try {
+    cerceve.executeJavaScript(kod, true).catch(() => { /* cerceve gitmis olabilir */ });
+  } catch { /* cerceve gitmis olabilir */ }
+}
+
 function altCerceveleriGiydir(wc, css) {
   if (!css || wc.isDestroyed()) return;
   let cerceveler;
   try { cerceveler = wc.mainFrame.framesInSubtree; } catch { return; }
 
+  let n = 0;
   for (const cerceve of cerceveler) {
     if (cerceve === wc.mainFrame) continue;
-    const kod = '(() => { const s = document.createElement("style");'
-      + ' s.textContent = ' + JSON.stringify(css) + ';'
-      + ' (document.head || document.documentElement).appendChild(s); })()';
-    try {
-      cerceve.executeJavaScript(kod, true).catch(() => { /* cerceve gitmis olabilir */ });
-    } catch { /* cerceve gitmis olabilir */ }
+    cerceveGiydir(cerceve, css);
+    if (++n >= EN_COK_ALT_CERCEVE) break;   // asiri iframe'li sayfada patlamayi onle
   }
 }
 

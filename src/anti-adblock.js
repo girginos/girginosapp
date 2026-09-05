@@ -177,43 +177,74 @@ function anaDunyaKodu() {
     } catch (e) { /* geç */ }
   }
 
-  function tara(kok) {
+  /*
+   * TARAMA UCUZ OLMALI. Örtü her zaman body'nin DOĞRUDAN çocuğu (ya da <dialog>)
+   * olarak eklenir; tüm belgeyi querySelectorAll('div,...') ile taramak (binlerce
+   * öge × getComputedStyle) ağır SPA'larda (chromewebstore/YouTube) renderer'ı
+   * kilitliyordu - ölçüldü. Artık yalnız body'nin ~onlarca doğrudan çocuğu +
+   * <dialog>'lar taranıyor. Örtü buraya eklendiği için kapsam aynı, maliyet cüzi.
+   */
+  function tara() {
     try {
-      var aday = (kok || document).querySelectorAll('div,section,aside,dialog');
+      var b = document.body;
+      if (!b) return;
       var bulundu = false;
-      for (var i = 0; i < aday.length; i++) {
-        if (ortuMu(aday[i])) { kaldir(aday[i]); bulundu = true; }
+      var c = b.children;
+      for (var i = 0; i < c.length; i++) {
+        if (ortuMu(c[i])) { kaldir(c[i]); bulundu = true; }
+      }
+      var dlg = document.getElementsByTagName('dialog');
+      for (var k = 0; k < dlg.length; k++) {
+        if (ortuMu(dlg[k])) { kaldir(dlg[k]); bulundu = true; }
       }
       if (bulundu) kaydirmayiAc();
     } catch (e) { /* geç */ }
   }
 
   try {
-    var gozlemci = new MutationObserver(function (kayitlar) {
+    /*
+     * Gözlemci DEBOUNCE'LU ve SINIRLI. Her mutasyonda tam tarama yapmak yerine
+     * eklenen düğümün KENDİSİNİ ucuz kontrol ediyor (alt ağaç taraması YOK) ve
+     * tam taramayı en çok ~600 ms'de bir, toplam EN_COK kez planlıyor. Duvar
+     * yükleme çevresinde çıkar; sonrasında gözlemci kendini kapatıyor ki uzun
+     * ömürlü SPA'da sonsuza dek CPU yemesin.
+     */
+    var taramaBekliyor = false, taramaSayisi = 0;
+    var EN_COK = 20;
+    var gozlemci = null;
+    function taraPlanla() {
+      if (taramaBekliyor || taramaSayisi >= EN_COK) return;
+      taramaBekliyor = true;
+      setTimeout(function () {
+        taramaBekliyor = false; taramaSayisi++;
+        tara();
+        if (taramaSayisi >= EN_COK && gozlemci) { try { gozlemci.disconnect(); } catch (e) { /* geç */ } }
+      }, 600);
+    }
+    gozlemci = new MutationObserver(function (kayitlar) {
       for (var i = 0; i < kayitlar.length; i++) {
         var ekli = kayitlar[i].addedNodes;
         for (var j = 0; j < ekli.length; j++) {
           var d = ekli[j];
-          if (d.nodeType !== 1) continue;
-          if (ortuMu(d)) { kaldir(d); kaydirmayiAc(); }
-          else if (d.querySelectorAll) tara(d);
+          if (d.nodeType === 1 && ortuMu(d)) { kaldir(d); kaydirmayiAc(); }
         }
       }
+      taraPlanla();   // tam tarama debounce'lu + sınırlı
     });
     var basla = function () {
       if (document.documentElement) {
         gozlemci.observe(document.documentElement, { childList: true, subtree: true });
       }
-      tara(document);
+      tara();
     };
     if (document.documentElement) basla();
     else document.addEventListener('readystatechange', basla, { once: true });
-    // Örtü çoğunlukla window load'da çıkıyor; birkaç kez daha tara.
-    window.addEventListener('DOMContentLoaded', function () { tara(document); });
+    // Örtü çoğunlukla window load'da çıkıyor; birkaç kez daha (ucuz) tara.
+    window.addEventListener('DOMContentLoaded', function () { tara(); });
     window.addEventListener('load', function () {
-      tara(document);
-      setTimeout(function () { tara(document); }, 500);
-      setTimeout(function () { tara(document); }, 1500);
+      tara();
+      setTimeout(tara, 600);
+      setTimeout(tara, 1600);
     });
   } catch (e) { /* observer yoksa yalnızca proaktif katman kalır */ }
 }

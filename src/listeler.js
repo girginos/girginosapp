@@ -23,23 +23,20 @@ const { BetikDepo, betikCoz, yerleşikDepo } = require('./betikler');
  */
 
 /*
- * Varsayılan listeler uBlock Origin'in etkinleştirdiği çekirdek kümeyi
- * yansıtıyor. EasyList/EasyPrivacy ağ + kozmetik tarafını taşıyor; uBO'nun kendi
- * listeleri asıl SCRIPTLET gücünü (anti-adblock, YouTube, reklam scriptleri -
- * ~3000 kural) ve gelişmiş kozmetikleri getiriyor. AdGuard Türkçe, r10.net gibi
- * yerel siteleri kapsıyor. uBO listeleri "güvenilir": trusted-* scriptlet'ler
- * (yanıt gövdesini yeniden yazan) yalnızca bunlardan çalışır.
+ * VARSAYILAN LİSTELER - kararlı çekirdek (EasyList + EasyPrivacy).
+ *
+ * 0.4.5'te uBlock Origin + AdGuard listeleri varsayılana eklenmişti; ölçüldü:
+ * bu listeler devreye girer girmez Chromium native kodunda çökme (0xC0000005)
+ * başladı - chromewebstore/YouTube gibi sitelerde tarayıcı kapanıyordu. Windows
+ * Olay Günlüğü kanıtladı: çökmeler YALNIZ 0.4.5/0.4.6'da; 0.4.3/0.4.4'te hiç yok.
+ * Kesin kuralı uzaktan izole edemediğimizden, kararlılık için 0.4.4 seviyesine
+ * dönüldü. Scriptlet motoru + yerleşik anti-adblock (blackhatworld) hâlâ etkin;
+ * EasyList/EasyPrivacy kozmetik + ağ engellemesi çalışıyor. uBO listeleri ileride
+ * çökme düzgün izole edilince güvenle geri eklenecek (kullanıcı elle de ekleyebilir).
  */
 const VARSAYILAN_LISTELER = [
   { id: 'easylist', ad: 'EasyList', aciklama: 'Reklamlar', url: 'https://easylist.to/easylist/easylist.txt' },
-  { id: 'easyprivacy', ad: 'EasyPrivacy', aciklama: 'İzleyiciler', url: 'https://easylist.to/easylist/easyprivacy.txt' },
-  { id: 'ublock-filters', ad: 'uBlock filtreleri — Reklamlar', aciklama: 'Scriptlet + kozmetik', url: 'https://ublockorigin.github.io/uAssets/filters/filters.txt' },
-  { id: 'ublock-privacy', ad: 'uBlock filtreleri — Gizlilik', aciklama: 'İzleyici scriptletleri', url: 'https://ublockorigin.github.io/uAssets/filters/privacy.txt' },
-  { id: 'ublock-badware', ad: 'uBlock filtreleri — Zararlı', aciklama: 'Kötü amaçlı siteler', url: 'https://ublockorigin.github.io/uAssets/filters/badware.txt' },
-  { id: 'ublock-quickfixes', ad: 'uBlock filtreleri — Hızlı düzeltmeler', aciklama: 'YouTube dahil güncel yamalar', url: 'https://ublockorigin.github.io/uAssets/filters/quick-fixes.txt' },
-  { id: 'ublock-resourceabuse', ad: 'uBlock filtreleri — Kaynak istismarı', aciklama: 'Anti-adblock, madenciler', url: 'https://ublockorigin.github.io/uAssets/filters/resource-abuse.txt' },
-  { id: 'ublock-unbreak', ad: 'uBlock filtreleri — Onarım', aciklama: 'Aşırı engellemeyi düzeltir', url: 'https://ublockorigin.github.io/uAssets/filters/unbreak.txt' },
-  { id: 'adguard-turkce', ad: 'AdGuard Türkçe', aciklama: 'Türk siteleri (r10.net vb.)', url: 'https://filters.adtidy.org/extension/ublock/filters/13.txt' }
+  { id: 'easyprivacy', ad: 'EasyPrivacy', aciklama: 'İzleyiciler', url: 'https://easylist.to/easylist/easyprivacy.txt' }
 ];
 
 const EN_BUYUK_BAYT = 16 * 1024 * 1024;
