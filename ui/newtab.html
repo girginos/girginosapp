@@ -10,11 +10,14 @@
     --zemin: #f4f6f9; --kart: #fff; --metin: #1c1f26; --metin2: #6b7280;
     --cizgi: #e2e5ea; --vurgu: #2867ff; --vurgu-yumusak: rgba(40,103,255,.10);
     --golge: 0 1px 2px rgba(16,20,30,.06), 0 8px 24px rgba(16,20,30,.05);
+    /* Animasyonlu arka plandaki yumuşak renk lekeleri (açık tema). */
+    --leke1: rgba(40,103,255,.16); --leke2: rgba(120,80,255,.13); --leke3: rgba(0,180,200,.12);
   }
   @media (prefers-color-scheme: dark) {
     :root { --zemin: #16181d; --kart: #23262e; --metin: #e8eaee; --metin2: #9aa2b1;
             --cizgi: #333844; --vurgu: #4d8dff; --vurgu-yumusak: rgba(77,141,255,.16);
-            --golge: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.28); }
+            --golge: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.28);
+            --leke1: rgba(77,141,255,.20); --leke2: rgba(150,110,255,.16); --leke3: rgba(0,200,220,.13); }
   }
   * { box-sizing: border-box; }
   body {
@@ -23,7 +26,31 @@
     font: 14px/1.5 "Segoe UI", system-ui, -apple-system, sans-serif;
     display: flex; justify-content: center;
   }
-  main { width: min(900px, 100%); padding: 8vh 24px 48px; }
+
+  /*
+   * Animasyonlu arka plan: yavaşça yer değiştiren birkaç bulanık renk lekesi.
+   * Dikkat dağıtmayan, gizlilik temasına uygun sakin bir hareket; yalnızca CSS
+   * (canvas/JS yok). Sabit konumlu ve z-index -1, içeriğin altında kalır,
+   * pointer-events yok - tıklamayı engellemez.
+   */
+  body::before {
+    content: ''; position: fixed; inset: -25%;
+    z-index: -1; pointer-events: none;
+    background:
+      radial-gradient(38% 38% at 22% 28%, var(--leke1), transparent 70%),
+      radial-gradient(34% 34% at 80% 22%, var(--leke2), transparent 70%),
+      radial-gradient(42% 42% at 62% 82%, var(--leke3), transparent 70%);
+    filter: blur(64px);
+    animation: lekeGez 26s ease-in-out infinite alternate;
+  }
+  @keyframes lekeGez {
+    from { transform: translate(0, 0) scale(1) rotate(0deg); }
+    to   { transform: translate(2%, 3%) scale(1.12) rotate(6deg); }
+  }
+  /* "Hareketi azalt" tercihine saygı: animasyon durur, lekeler sabit kalır. */
+  @media (prefers-reduced-motion: reduce) { body::before { animation: none; } }
+
+  main { width: min(900px, 100%); padding: 8vh 24px 48px; position: relative; }
 
   /* ---- marka + arama ---- */
   .marka { display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 22px; }
@@ -31,22 +58,36 @@
   .marka h1 { margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -.02em; }
   .marka span { display: block; color: var(--metin2); font-size: 12px; font-weight: 400; letter-spacing: 0; margin-top: 1px; }
 
-  form { display: flex; max-width: 620px; margin: 0 auto 40px; box-shadow: var(--golge); border-radius: 26px; }
+  form {
+    display: flex; align-items: center; gap: 6px;
+    max-width: 620px; margin: 0 auto 40px;
+    padding: 6px 6px 6px 4px;
+    background: var(--kart);
+    border: 1px solid var(--cizgi); border-radius: 30px;
+    box-shadow: var(--golge);
+    transition: border-color .12s ease, box-shadow .12s ease;
+  }
+  form:focus-within { border-color: var(--vurgu); box-shadow: var(--golge), 0 0 0 3px var(--vurgu-yumusak); }
   input[type="text"] {
     flex: 1; min-width: 0;
-    padding: 14px 20px;
-    border: 1px solid var(--cizgi); border-right: 0; border-radius: 26px 0 0 26px;
-    background: var(--kart); color: var(--metin);
+    padding: 12px 16px;
+    border: 0; border-radius: 26px;
+    background: transparent; color: var(--metin);
     font: inherit; font-size: 15px; outline: none;
   }
-  form:focus-within input[type="text"], form:focus-within button[type="submit"] { border-color: var(--vurgu); }
+  /* Belirgin, yuvarlak arama düğmesi: vurgu renginde, büyüteç ikonlu. */
   button[type="submit"] {
-    padding: 0 24px;
-    border: 1px solid var(--cizgi); border-left: 0; border-radius: 0 26px 26px 0;
-    background: var(--kart); color: var(--metin2);
-    font: inherit; font-size: 14px; cursor: pointer;
+    flex: 0 0 auto;
+    display: flex; align-items: center; gap: 8px;
+    padding: 0 20px 0 16px; height: 42px;
+    border: 0; border-radius: 24px;
+    background: var(--vurgu); color: #fff;
+    font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+    transition: filter .12s ease, transform .12s ease;
   }
-  button[type="submit"]:hover { color: var(--vurgu); }
+  button[type="submit"] svg { width: 17px; height: 17px; }
+  button[type="submit"]:hover { filter: brightness(1.08); }
+  button[type="submit"]:active { transform: scale(.97); }
 
   /* ---- bölüm başlıkları ---- */
   h2 {
@@ -142,7 +183,10 @@
 
     <form id="aramaFormu" autocomplete="off">
       <input type="text" id="sorgu" name="q" placeholder="Ara ya da adres yaz" aria-label="Arama" autofocus>
-      <button type="submit">Ara</button>
+      <button type="submit">
+        <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="9" cy="9" r="6"/><path d="M14 14l4 4"/></svg>
+        <span>Ara</span>
+      </button>
     </form>
 
     <section id="sikBolum">

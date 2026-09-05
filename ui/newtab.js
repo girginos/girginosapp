@@ -34,7 +34,8 @@ try { M = JSON.parse(par.get('metin') || '{}'); } catch { /* varsayılanlar */ }
 const m = (anahtar, varsayilan) => (typeof M[anahtar] === 'string' && M[anahtar]) || varsayilan;
 
 document.querySelector('.marka span').textContent = m('slogan', 'gizlilik odaklı tarayıcı');
-document.querySelector('#aramaFormu button[type="submit"]').textContent = m('ara', 'Ara');
+// Yalnızca metin span'ine yaz: butonun içindeki büyüteç SVG'si korunsun.
+document.querySelector('#aramaFormu button[type="submit"] span').textContent = m('ara', 'Ara');
 document.getElementById('sorgu').placeholder = m('araIpucu', 'Ara ya da adres yaz');
 document.querySelector('#sikBolum h2').textContent = m('sik', 'Sık gidilenler');
 document.querySelector('#duyuruBolum h2').textContent = m('oneCikan', 'Öne çıkan');

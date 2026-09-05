@@ -86,11 +86,11 @@ svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width:
   align-items: center;
   gap: 8px;
   height: 33px;
-  /* Chrome'un azami sekme genisligi 240px civari; 300px belirgin sekilde
-     genisti ve az sayida sekmede bile serit gereginden dolu gorunuyordu. */
-  min-width: 92px;
-  max-width: 220px;
-  flex: 1 1 200px;
+  /* Chrome'un azami sekme genisligi 240px civari. 300px cok genisti, 220px ise
+     dardi; 250px ikisinin arasi rahat bir deger. */
+  min-width: 110px;
+  max-width: 250px;
+  flex: 1 1 230px;
   padding: 0 8px 0 12px;
   border-radius: 10px 10px 0 0;
   color: var(--metin2);
@@ -201,12 +201,14 @@ svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width:
 #arac.yukleniyor .svg-yenile { display: none; }
 #arac.yukleniyor .svg-dur { display: block; }
 
-/* Genel reklam engelleyici düğmesi: açıkken kesintili engel simgesi (etkin,
-   vurgu rengi), kapalıyken kesikli daire. #btnYenile'nin iki-svg desenini
-   izler. */
+/* Genel reklam engelleyici düğmesi. Açık/kapalı ayrımı BELİRGİN olmalı:
+   sadece simge değişimi (daire vs kesikli daire) fark edilmiyordu. Açıkken
+   vurgu rengi + dolu zemin (basılı görünüm), kapalıyken soluk gri. */
 #btnReklamEngel .svg-engel-kapali { display: none; }
 #btnReklamEngel:not(.etkin) .svg-engel-acik { display: none; }
 #btnReklamEngel:not(.etkin) .svg-engel-kapali { display: block; }
+#btnReklamEngel.etkin { color: var(--vurgu); background: var(--vurgu-yumusak); }
+#btnReklamEngel:not(.etkin) { color: var(--metin2); }
 
 #adresKutu {
   position: relative;
