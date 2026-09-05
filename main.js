@@ -502,7 +502,9 @@ function olaylariBagla(t) {
     if (yeni === t.favicon) return;
     t.favicon = yeni;
     // Simgeyi bir kez indirip yerel önbelleğe alıyoruz; arayüz oradan okuyor.
-    if (yeni && faviconlar) faviconlar.kaydet(hostAl(t.url), yeni);
+    // ziyaretEdildi: kullanıcı bu sekmeyi açtı, yani birinci taraf simge için
+    // kimlikli istek uygun (Cloudflare çerezi yeniden kullanılabilsin).
+    if (yeni && faviconlar) faviconlar.kaydet(hostAl(t.url), yeni, { ziyaretEdildi: true });
     durumGonder();
   });
 
@@ -551,9 +553,29 @@ function olaylariBagla(t) {
     tazele();
   });
 
+  wc.on('did-navigate', () => { t.sonReset = null; });
+
   wc.on('did-fail-load', (_e, kod, aciklama, adres, anaCerceve) => {
     // -3 = ABORTED: kullanıcı gezinmeyi iptal etti, hata sayfası gösterme.
     if (wc.isDestroyed() || !anaCerceve || kod === -3) return;
+
+    /*
+     * -101 = CONNECTION_RESET: çoğunlukla boşta kalmış bir soketin sunucu
+     * tarafında kapatılması. Kullanıcı zaten elle "tekrar dene" deyince
+     * açılıyor (ölçüldü: bizim başlıklarımız/vekilimiz üretmiyor, ağ tarafı
+     * geçici). Bunu bir kez kendimiz deniyoruz; hata sayfası ancak ikinci kez
+     * de sıfırlarsa çıkıyor. Yalnızca aynı adres için TEK sefer: kalıcı bir
+     * sıfırlamada sonsuz döngü olmasın. GET olmayan gezinmeler yeniden
+     * denenmez - Electron did-fail-load'da yöntemi vermiyor, ama -101 el
+     * sıkışmadan önce olur, yani gövde henüz gönderilmemiştir; yine de
+     * güvende kalmak için yalnızca bir kez.
+     */
+    if (kod === -101 && t.sonReset !== adres) {
+      t.sonReset = adres;
+      setTimeout(() => { if (!wc.isDestroyed()) wc.reload(); }, 250);
+      return;
+    }
+
     t.hataAdresi = adres || t.url || '';
     wc.loadURL(hataAdresi(kod, aciklama, adres));
   });

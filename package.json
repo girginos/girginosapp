@@ -11,7 +11,7 @@
     "start": "electron .",
     "dev": "electron . --dev",
     "test": "node test/dogrula.js && node test/guvenlik.js && node test/guncelleme.js && node test/sozlesme.js",
-    "test-electron": "electron test/electron-cerez.js && electron test/electron-kozmetik.js && electron test/electron-vekil.js && node test/electron-uygulama.js",
+    "test-electron": "electron test/electron-cerez.js && electron test/electron-kozmetik.js && electron test/electron-vekil.js && electron test/electron-favicon.js && node test/electron-reset.js && node test/electron-uygulama.js",
     "anahtar-uret": "node scripts/anahtar-uret.js",
     "paket": "electron-builder",
     "paket-dizin": "electron-builder --dir",

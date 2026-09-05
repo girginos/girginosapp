@@ -3,6 +3,7 @@
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
+const { kokAlanAdi, hostAl } = require('./blocker');
 
 /*
  * Favicon önbelleği.
@@ -65,6 +66,17 @@ function turuTespitEt(veri) {
 function alanTemiz(host) {
   const h = String(host || '').toLowerCase().replace(/^www\./, '').replace(/\.+$/, '');
   return ALAN_BICIMI.test(h) && !h.includes('..') ? h : '';
+}
+
+/*
+ * Simge adresi sayfayla AYNI kayıtlanabilir alan adında mı? Kimlik yalnızca
+ * birinci taraf simgeye gönderiliyor; kokAlanAdi engelleyicinin PSL'siyle
+ * aynı, yani "google.com" ile "google.com.izleyici.net" birbirine karışmıyor.
+ */
+function faviconBirinciTarafMi(sayfaHost, faviconUrl) {
+  const sayfaKok = kokAlanAdi(String(sayfaHost || '').toLowerCase().replace(/\.+$/, ''));
+  const simgeKok = kokAlanAdi(hostAl(faviconUrl));
+  return !!sayfaKok && sayfaKok === simgeKok;
 }
 
 /*
@@ -166,17 +178,40 @@ class FaviconDeposu {
     }
   }
 
-  /** Sayfanın bildirdiği favicon adresini indirip saklar. */
-  async kaydet(host, faviconUrl) {
+  /**
+   * Sayfanın bildirdiği favicon adresini indirip saklar.
+   * @param {object} [secenek]
+   * @param {boolean} [secenek.ziyaretEdildi] Kullanıcı bu sekmeyi gerçekten
+   *   açtı mı? Yalnızca o zaman kimlikli istek düşünülür (bkz. _getir).
+   */
+  async kaydet(host, faviconUrl, secenek = {}) {
     const alan = alanTemiz(host);
     if (!alan || !faviconUrl || this.deneniyor.has(alan)) return;
 
     const mevcut = this.kayit.get(alan);
     if (mevcut && this._tazeMi(alan, mevcut)) return;
 
+    /*
+     * KİMLİKLİ İSTEK YALNIZCA ZİYARET EDİLEN SEKMEDE VE BİRİNCİ TARAF SİMGEDE.
+     *
+     * Simge ayrı bir session.fetch ile iniyor; 0.4.0'da güvenlik için bu istek
+     * çerezsiz yapıldı ama Cloudflare-korumalı siteler (blackhatworld) çerezsiz
+     * favicon isteğine 403 "Just a moment" dönüyor: sekme challenge'ı geçip
+     * cf_clearance çerezini alıyor, ayrı favicon isteği o çerezi göndermediği
+     * için düşüyor ve harf rozetine kalıyordu. Ölçüldü.
+     *
+     * Çözüm çerezi geri açmak DEĞİL, dar bir istisna: kullanıcının AÇTIĞI
+     * sekmede, simge adresi sayfayla AYNI kayıtlanabilir alan adındaysa kimlik
+     * gönderiliyor - o siteye zaten kimlikli gidiyoruz, ek maruziyet yok.
+     * Üçüncü taraf simge adresi ("<link rel=icon href=izleyici...>") ve açılış
+     * ön-ısıtması kimliksiz kalıyor; güvenlik düzeltmesinin amacı korunuyor.
+     */
+    const birinciTaraf = !!secenek.ziyaretEdildi
+      && faviconBirinciTarafMi(host, faviconUrl);
+
     this.deneniyor.add(alan);
     try {
-      const { veri, uzanti } = await this._getir(faviconUrl);
+      const { veri, uzanti } = await this._getir(faviconUrl, birinciTaraf);
       if (!veri || !uzanti) return;
       await fsp.mkdir(this.dizin, { recursive: true });
       // Tür değiştiyse eski dosya kalmasın.
@@ -195,7 +230,7 @@ class FaviconDeposu {
     }
   }
 
-  async _getir(faviconUrl) {
+  async _getir(faviconUrl, kimlikli = false) {
     // Sayfalar simgeyi doğrudan gömebiliyor.
     if (/^data:image\//i.test(faviconUrl)) {
       const m = /^data:([^;,]+)(;base64)?,(.*)$/i.exec(faviconUrl);
@@ -212,14 +247,22 @@ class FaviconDeposu {
     if (!/^https?:\/\//i.test(faviconUrl)) return {};
 
     /*
-     * CEREZSIZ. Simge adresini SAYFA seciyor: tek bir <link rel="icon"> ile
-     * herhangi bir siteye kimlikli istek attirilabiliyor ve yanitla yeni bir
-     * cerez yazdirilabiliyordu - engellemeye calistigimiz izleme pikselinin ta
-     * kendisi. Acilistaki on isitma da gecmisteki her siteye kimlikli bir
-     * "bu hesap simdi tarayici acti" bildirimi gonderiyordu. Olculdu.
+     * VARSAYILAN CEREZSIZ. Simge adresini SAYFA seciyor: tek bir <link
+     * rel="icon"> ile herhangi bir siteye kimlikli istek attirilabiliyor ve
+     * yanitla yeni cerez yazdirilabiliyordu. Kimlik yalnizca kaydet()'in
+     * onayladigi dar durumda gonderiliyor (ziyaret edilen sekme + birinci
+     * taraf simge); gerekce orada yazili.
      */
-    const y = await this.oturum.fetch(faviconUrl, { cache: 'no-cache', credentials: 'omit' });
-    if (y.status !== 200) return {};
+    const y = await this.oturum.fetch(faviconUrl, {
+      cache: 'no-cache',
+      credentials: kimlikli ? 'include' : 'omit'
+    });
+    if (y.status !== 200) {
+      // Sessiz basarisizligi izlenebilir kil: 403 cogunlukla bot korumasi
+      // (Cloudflare "Just a moment") ve harf rozetine dusmenin nedeni bu.
+      if (y.status === 403) console.debug('favicon ' + faviconUrl + ': HTTP 403 (bot korumasi olabilir)');
+      return {};
+    }
 
     const tur = String(y.headers.get('content-type') || '').split(';')[0].trim().toLowerCase();
     let uzanti = TURLER[tur];
@@ -293,4 +336,4 @@ class FaviconDeposu {
   }
 }
 
-module.exports = { FaviconDeposu, SEMA, alanTemiz };
+module.exports = { FaviconDeposu, SEMA, alanTemiz, faviconBirinciTarafMi };

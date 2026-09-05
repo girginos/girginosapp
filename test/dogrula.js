@@ -413,6 +413,34 @@ esit('her kayıt geçerli alan adı biçiminde', LISTE.filter(d => !ALAN_BICIMI.
   esit('alan adsız çerez için url yok', cerezSilmeUrl({ domain: '' }), null);
 }
 
+/* ---- favicon birinci taraf kararı ---- */
+{
+  const { faviconBirinciTarafMi } = require('../src/faviconlar');
+
+  esit('aynı alan birinci taraf',
+    faviconBirinciTarafMi('blackhatworld.com', 'https://blackhatworld.com/favicon.ico'), true);
+  esit('www farkı birinci tarafı bozmaz',
+    faviconBirinciTarafMi('www.blackhatworld.com', 'https://blackhatworld.com/data/x.png'), true);
+  esit('alt alan birinci taraf sayılır',
+    faviconBirinciTarafMi('forum.site.com', 'https://cdn.site.com/f.ico'), true);
+  esit('farklı alan üçüncü taraf',
+    faviconBirinciTarafMi('blackhatworld.com', 'https://cdn.cloudflare.com/px.png'), false);
+  /*
+   * Kimlik yalnızca birinci tarafa gidiyor; bu kontrol PSL kullanmasaydı
+   * "google.com.izleyici.net" google için yazılmış çereze erişebilirdi.
+   */
+  esit('sahte alt alan aldatmaz',
+    faviconBirinciTarafMi('site.com', 'https://google.com.izleyici.net/f.ico'), false);
+  esit('barındırma son ekinde ayrı kullanıcılar ayrışır',
+    faviconBirinciTarafMi('a.github.io', 'https://b.github.io/favicon.ico'), false);
+  esit('barındırma son ekinde aynı kullanıcı birinci taraf',
+    faviconBirinciTarafMi('a.github.io', 'https://a.github.io/favicon.ico'), true);
+  esit('bozuk simge adresi birinci taraf değil',
+    faviconBirinciTarafMi('site.com', 'bu adres değil'), false);
+  esit('boş sayfa alanı birinci taraf değil',
+    faviconBirinciTarafMi('', 'https://site.com/f.ico'), false);
+}
+
 /* ---- vekil sunucu ---- */
 {
   const { adresCoz, adresGecerliMi, atlamaKurali, vekilKurallari, HEP_ATLANAN } = require('../src/vekil');
