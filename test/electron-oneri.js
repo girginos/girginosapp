@@ -108,10 +108,24 @@ function kapat(cocuk) {
     bak('başlangıçta sayfa görüntüsü gizli',
       await cdp(ws, 'document.getElementById("sayfaGoruntu").hidden').catch(() => null), true);
 
+    const chromeOnce = await cdp(ws,
+      'Math.round(document.getElementById("chrome").getBoundingClientRect().height)').catch(() => -1);
+
     // Adres çubuğuna yaz -> öneri açılsın.
     await cdp(ws, '(()=>{const a=document.getElementById("adres");a.focus();a.value="ornek";'
       + 'a.dispatchEvent(new Event("input",{bubbles:true}));return 1;})()');
     await bekle(2500);
+
+    /*
+     * Öneri açılınca chrome yüksekliği DEĞİŞMEMELİ - liste mutlak konumlu,
+     * akıştan çıktığı için sayfayı itmiyor. Değişirse sayfa görüntüsü farklı
+     * boyutta yakalanıp gerilir ve içerik kayar (kullanıcının gördüğü hata).
+     */
+    const chromeSonra = await cdp(ws,
+      'Math.round(document.getElementById("chrome").getBoundingClientRect().height)').catch(() => -2);
+    bak('öneri açılınca chrome yüksekliği sabit (sayfa itilmiyor)', chromeSonra, chromeOnce);
+    bak('öneri listesi mutlak konumlu',
+      await cdp(ws, 'getComputedStyle(document.getElementById("oneriler")).position').catch(() => null), 'absolute');
 
     bak('öneri açık', await cdp(ws, '!document.getElementById("oneriler").hidden').catch(() => null), true);
     bak('öneri satırları var', await cdp(ws, 'document.getElementById("oneriler").children.length > 0').catch(() => null), true);

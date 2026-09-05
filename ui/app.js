@@ -569,6 +569,8 @@ function oneriHizala() {
   const sag = Math.max(0, document.documentElement.clientWidth - k.right);
   el.oneriler.style.setProperty('--oneri-sol', Math.round(k.left) + 'px');
   el.oneriler.style.setProperty('--oneri-sag', Math.round(sag) + 'px');
+  // Liste mutlak konumlu; üst kenarı adres kutusunun hemen altına gelsin.
+  el.oneriler.style.setProperty('--oneri-ust', Math.round(k.bottom + 4) + 'px');
 }
 
 function onerileriCiz() {
@@ -1598,7 +1600,9 @@ window.pusula.sayfaGoruntuDinle((veriUrl) => {
     el.sayfaGoruntu.style.backgroundImage = '';
     return;
   }
-  el.sayfaGoruntu.style.top = Math.round(el.oneriler.getBoundingClientRect().top) + 'px';
+  // Görüntü sayfa alanının başından (chrome'un altı) başlar. Öneri artık
+  // mutlak konumlu olduğu için onun top'u değil, chrome yüksekliği ölçülüyor.
+  el.sayfaGoruntu.style.top = Math.round(el.chrome.getBoundingClientRect().height) + 'px';
   el.sayfaGoruntu.style.backgroundImage = 'url("' + veriUrl + '")';
   el.sayfaGoruntu.hidden = false;
 });

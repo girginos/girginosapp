@@ -342,10 +342,21 @@ svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width:
    sarkan bir kart gibi görünmeli: sol/sağ boşlukları adres kutusu ölçülerek
    veriliyor (bkz. app.js oneriHizala). */
 
+/*
+ * KONUMLANDIRMA MUTLAK (absolute). Öneri listesi chrome AKIŞINDA olsaydı
+ * açıldığında #chrome'u büyütür, yukseklikGozcusu bunu bildirir ve sayfa
+ * görünümü aşağı itilirdi (capturePage de o itilmiş anı yakalardı). Akıştan
+ * çıkınca chrome yüksekliği sabit kalıyor, sayfa hiç itilmiyor; liste adres
+ * kutusunun altına app.js oneriHizala'nın verdiği konuma oturuyor.
+ */
 #oneriler {
+  position: absolute;
+  top: var(--oneri-ust, 88px);
+  left: var(--oneri-sol, 8px);
+  right: var(--oneri-sag, 8px);
+  z-index: 20;
   max-height: 328px;
   overflow-y: auto;
-  margin: 2px var(--oneri-sag, 8px) 6px var(--oneri-sol, 8px);
   padding: 4px;
   border: 1px solid var(--cizgi);
   border-radius: 12px;
@@ -367,14 +378,11 @@ svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width:
 #sayfaGoruntu[hidden] { display: none; }
 
 /*
- * Arama önerileri açıkken yer imleri çubuğu gizlenir. Öneri listesi sayfa
- * katmanının üstüne binemediği için chrome akışında duruyor; altındaki yer
- * imleri çubuğu da akışta kaldığından ikisi arka arkaya diziliyor ve şerit
- * sıkışıp bozuk görünüyordu. Chrome'da da öneri açıkken yer imleri çubuğu
- * kapanır. #oneriler, #yerImleriCubugu'ndan önce geldiği için sonraki-kardeş
- * seçici bunu JS'siz yapıyor.
+ * Öneri listesi artık mutlak konumlu (akıştan çıktı), bu yüzden yer imleri
+ * çubuğunu gizlemeye gerek yok: liste onun üstüne biniyor ve chrome yüksekliği
+ * öneriden bağımsız sabit kalıyor. Yer imleri gizlense chrome küçülür, sayfa
+ * görüntüsü farklı boyutta yakalanıp gerilir ve içerik kayardı.
  */
-#oneriler:not([hidden]) ~ #yerImleriCubugu { display: none; }
 
 .oneri {
   display: flex; align-items: center; gap: 10px;
