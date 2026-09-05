@@ -448,6 +448,82 @@ esit('her kayıt geçerli alan adı biçiminde', LISTE.filter(d => !ALAN_BICIMI.
   esit('alan adsız çerez için url yok', cerezSilmeUrl({ domain: '' }), null);
 }
 
+/* ---- kozmetik filtreler ---- */
+{
+  const { KozmetikDepo, kuralCoz, alanUyar, DEMET } = require('../src/kozmetik');
+
+  const coz = (s) => kuralCoz(s);
+  esit('genel kural', JSON.stringify(coz('##.reklam')),
+    JSON.stringify({ tip: 'gizle', alanlar: [], eksiler: [], secici: '.reklam' }));
+  esit('alana özel kural', coz('ornek.com##.kutu').alanlar[0], 'ornek.com');
+  esit('çoklu alan', coz('a.com,b.net##.x').alanlar.length, 2);
+  esit('dışlanan alan', coz('a.com,~alt.a.com##.x').eksiler[0], 'alt.a.com');
+  esit('istisna kuralı', coz('a.com#@#.x').tip, 'istisna');
+  esit('seçicide boşluk korunur', coz('a.com##div > .y').secici, 'div > .y');
+
+  // Yordamsal ve eklenti söz dizimi CSS'e çevrilemez; yarısını uygulamak
+  // seçiciyi geçersiz kılıp yanındaki kuralları da düşürürdü.
+  esit('yordamsal kural alınmaz', coz('a.com#?#div:has-text(reklam)'), null);
+  esit('stil kuralı alınmaz', coz('a.com#$#body { x: y }'), null);
+  esit('has-text alınmaz', coz('a.com##div:has-text(reklam)'), null);
+  esit('xpath alınmaz', coz('a.com##:xpath(//div)'), null);
+  // Süslü parantez enjekte edilen CSS'ten kaçıp kendi kuralını yazabilirdi.
+  esit('süslü parantezli seçici alınmaz', coz('a.com##div{color:red}'), null);
+  esit('ayraçsız satır kural değil', coz('||izleyici.com^'), null);
+  // :has() artık gerçek CSS; atmak 152 sürümde çalışan kuralları kaybettirirdi.
+  esit('yerel :has() kabul edilir', coz('a.com##div:has(> .ad)').secici, 'div:has(> .ad)');
+
+  esit('tam eşleşme', alanUyar('ornek.com', 'ornek.com'), true);
+  esit('alt alan adı', alanUyar('ornek.com', 'www.ornek.com'), true);
+  esit('benzer ama başka alan', alanUyar('ornek.com', 'kotuornek.com'), false);
+  esit('varlık biçimi .com', alanUyar('google.*', 'google.com'), true);
+  esit('varlık biçimi iki seviyeli', alanUyar('google.*', 'www.google.co.uk'), true);
+  /*
+   * Saldırgan "google.com.kotu.com" alan adını alıp google için yazılmış
+   * gizleme kurallarını kendi sayfasında çalıştırabilirdi.
+   */
+  esit('varlık biçimi sonda TLD ister', alanUyar('google.*', 'google.com.kotu.com'), false);
+
+  const d = new KozmetikDepo();
+  d.ekle(coz('##.genel-reklam'));
+  d.ekle(coz('haber.com##.yan-kutu'));
+  d.ekle(coz('haber.com#@#.genel-reklam'));
+  d.ekle(coz('spor.com,~canli.spor.com##.afis'));
+
+  esit('genel seçici her sitede', d.seciciler('baska.com').includes('.genel-reklam'), true);
+  esit('alana özel seçici', d.seciciler('www.haber.com').includes('.yan-kutu'), true);
+  esit('başka sitede alana özel yok', d.seciciler('baska.com').includes('.yan-kutu'), false);
+  // İstisna, genel kuralı o site için kaldırır.
+  esit('istisna genel kuralı kaldırır', d.seciciler('haber.com').includes('.genel-reklam'), false);
+  esit('istisna başka siteyi etkilemez', d.seciciler('spor.com').includes('.genel-reklam'), true);
+  esit('dışlanan alt alanda uygulanmaz', d.seciciler('canli.spor.com').includes('.afis'), false);
+  esit('dışlama üst alanı etkilemez', d.seciciler('spor.com').includes('.afis'), true);
+  esit('host yoksa seçici yok', d.seciciler('').length, 0);
+
+  /*
+   * Seçiciler demetlere bölünüyor: CSS'te tek bir geçersiz seçici, virgülle
+   * bağlı demetin TAMAMINI düşürür. Tek demet kullansaydık listeye giren bozuk
+   * bir seçici bütün kozmetik filtrelemeyi sessizce kapatırdı.
+   */
+  const cok = new KozmetikDepo();
+  for (let i = 0; i < DEMET * 2 + 1; i++) cok.ekle(coz('##.k' + i));
+  const satirlar = cok.css('ornek.com').split('\n');
+  esit('demetlere bölünür', satirlar.length, 3);
+  esit('demet boyu aşılmaz', satirlar[0].split('{')[0].split(',').length, DEMET);
+  esit('kural gizleme kuralı', satirlar[0].endsWith('{display:none!important}'), true);
+  esit('seçici yoksa boş CSS', new KozmetikDepo().css('ornek.com'), '');
+
+  // Önbelleğe yazılıp geri okunduğunda kurallar aynı kalmalı.
+  const geri = KozmetikDepo.iceAktar(d.disaAktar());
+  esit('dışa/içe aktarım korur',
+    JSON.stringify(geri.seciciler('haber.com').sort()), JSON.stringify(d.seciciler('haber.com').sort()));
+
+  const oteki = new KozmetikDepo();
+  oteki.ekle(coz('haber.com##.ikinci-liste'));
+  geri.birlestir(oteki);
+  esit('listeler birleşir', geri.seciciler('haber.com').includes('.ikinci-liste'), true);
+}
+
 if (hatalar.length) {
   console.error('\nBAŞARISIZ (' + hatalar.length + '):\n');
   for (const h of hatalar) console.error('  ✗ ' + h + '\n');

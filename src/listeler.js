@@ -5,16 +5,20 @@ const fsp = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { IKI_SEVIYELI } = require('./blocker');
+const { KozmetikDepo, kuralCoz } = require('./kozmetik');
 
 /*
  * Filtre listesi yöneticisi.
  *
- * Girginos Browser engelleyicisi yalnızca "şu ana makineye giden üçüncü taraf
- * istekleri kes" diyebiliyor. Adblock Plus söz diziminin geri kalanı (yol
- * kalıpları, kaynak türü kısıtları, $domain= bağlamı, kozmetik filtreler)
- * bizde karşılıksız. Bu yüzden ayrıştırıcı SADECE anlamını birebir
- * koruyabildiğimiz kuralları alır; gerisini sessizce atar. Yanlış çevrilen
- * bir kural, engellenmeyen bir izleyiciden daha kötüdür: sayfayı bozar.
+ * Girginos Browser engelleyicisi ağ tarafında yalnızca "şu ana makineye giden
+ * üçüncü taraf istekleri kes" diyebiliyor. Adblock Plus söz diziminin geri
+ * kalanı (yol kalıpları, kaynak türü kısıtları, $domain= bağlamı) bizde
+ * karşılıksız. Bu yüzden ayrıştırıcı SADECE anlamını birebir koruyabildiğimiz
+ * kuralları alır; gerisini sessizce atar. Yanlış çevrilen bir kural,
+ * engellenmeyen bir izleyiciden daha kötüdür: sayfayı bozar.
+ *
+ * Kozmetik kurallar (##, #@#) artık atılmıyor; src/kozmetik.js çözüyor ve
+ * sayfaya CSS olarak uygulanıyorlar.
  */
 
 const VARSAYILAN_LISTELER = [
@@ -28,6 +32,14 @@ const EN_AZ_GECERLILIK_SAAT = 6;
 const KONTROL_ARALIGI_MS = 6 * 60 * 60 * 1000;
 const ILK_KONTROL_GECIKMESI_MS = 15 * 1000; // açılışı yavaşlatmamak için
 const EN_AZ_KURAL = 20;                     // bundan azı "liste bozuk" sayılır
+
+/*
+ * Onbellek bicimi. Kozmetik kurallar 2. bicimle geldi; eski bir dosyada o alan
+ * hic yok ve ham metin saklanmadigi icin sonradan uretilemiyor. Numara
+ * artirilinca eski onbellekler yok sayilir ve liste yeniden indirilir.
+ */
+const BICIM = 2;
+const CSS_ONBELLEK_SINIRI = 500;
 
 // Yalnızca tek bir ana makine adı: joker, yol, port yok.
 const ALAN_BICIMI = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
@@ -84,6 +96,7 @@ function alanCapasiCoz(govde) {
 function ayristir(metin) {
   const alanlar = new Set();
   const istisnalar = new Set();
+  const kozmetik = new KozmetikDepo();
   const meta = { baslik: '', surum: '', gecerlilikSaat: VARSAYILAN_GECERLILIK_SAAT };
   let toplamKural = 0;
   let atlanan = 0;
@@ -106,15 +119,23 @@ function ayristir(metin) {
       }
       continue;
     }
+    /*
+     * Kozmetik filtreler: gizlenecek kutular. Söz dizimi src/kozmetik.js'te.
+     *
+     * YORUM DENETİMİNDEN ÖNCE geliyor. Genel kurallar "##.reklam" diye "#" ile
+     * BAŞLIYOR; aşağıdaki yorum denetimi onları yorum sanıp atıyordu, yani
+     * kozmetik filtrelerin en kalabalık kümesi (13 binden fazla kural) hiç
+     * uygulanmıyordu. Ölçünce çıktı.
+     */
+    if (satir.includes('##') || satir.includes('#@#') || satir.includes('#?#') || satir.includes('#$#')) {
+      const k = kuralCoz(satir);
+      if (k) { kozmetik.ekle(k); toplamKural++; continue; }
+      // Kozmetik değilse yorum ya da hosts satırı olabilir; aşağıya düşsün.
+    }
+
     if (satir[0] === '#') {
       const h = HOSTS_SATIRI.exec(satir);   // yorum satırı, hosts değil
       if (!h) continue;
-    }
-
-    // Kozmetik filtreler bizde karşılıksız
-    if (satir.includes('##') || satir.includes('#@#') || satir.includes('#?#') || satir.includes('#$#')) {
-      atlanan++;
-      continue;
     }
 
     toplamKural++;
@@ -153,7 +174,14 @@ function ayristir(metin) {
   // İstisna aynı alanı hem engelliyor hem serbest bırakıyorsa serbest bırakma kazanır.
   for (const h of istisnalar) alanlar.delete(h);
 
-  return { alanlar: [...alanlar], istisnalar: [...istisnalar], meta, toplamKural, atlanan };
+  return {
+    alanlar: [...alanlar],
+    istisnalar: [...istisnalar],
+    kozmetik: kozmetik.disaAktar(),
+    meta,
+    toplamKural,
+    atlanan
+  };
 }
 
 // Ana makine ya da üst alan adlarından biri kümede mi?
@@ -166,6 +194,14 @@ function kumedeMi(kume, host) {
     i = host.indexOf('.', i + 1);
   }
   return false;
+}
+
+// ayristir()'in döndürdüğü düz kozmetik nesnesindeki kural sayısı.
+function kozmetikSayisi(k) {
+  if (!k) return 0;
+  let n = (k.genel || []).length;
+  for (const liste of Object.values(k.alan || {})) n += liste.length;
+  return n;
 }
 
 function urlKimligi(url) {
@@ -185,9 +221,11 @@ class ListeYoneticisi {
     this.dizin = path.join(veriDizini, 'listeler');
     this.getir = getir;
     this.degisti = degisti || (() => {});
-    this.kayitlar = new Map();     // id -> { tanim, alanlar:Set, istisnalar:Set, ustBilgi }
+    this.kayitlar = new Map();     // id -> { tanim, alanlar:Set, istisnalar:Set, kozmetik, ustBilgi }
     this.alanlar = new Set();
     this.istisnalar = new Set();
+    this.kozmetik = new KozmetikDepo();
+    this._cssOnbellek = new Map();  // host -> hazırlanmış CSS
     this._zamanlayici = null;
     this._ilkZamanlayici = null;
     this._calisiyor = false;
@@ -207,10 +245,18 @@ class ListeYoneticisi {
       try {
         const ham = await fsp.readFile(this._dosya(tanim.id), 'utf8');
         const k = JSON.parse(ham);
+        /*
+         * Önbellek biçimi eskiyse kullanılmıyor. Kozmetik kurallar ham metinden
+         * üretiliyor ve ham metni saklamıyoruz; eski bir önbelleği kabul etmek,
+         * liste "güncel" göründüğü hâlde kozmetik filtrelerin GÜNLERCE boş
+         * kalması demek olurdu. Kayıt yoksa bir sonraki denetim indiriyor.
+         */
+        if (k.bicim !== BICIM) continue;
         this.kayitlar.set(tanim.id, {
           tanim,
           alanlar: new Set(k.alanlar || []),
           istisnalar: new Set(k.istisnalar || []),
+          kozmetik: KozmetikDepo.iceAktar(k.kozmetik),
           ustBilgi: k.ustBilgi || {}
         });
       } catch {
@@ -223,15 +269,37 @@ class ListeYoneticisi {
   _birlestir() {
     const a = new Set();
     const i = new Set();
+    const kz = new KozmetikDepo();
     if (this.acik) {
       for (const k of this.kayitlar.values()) {
         for (const h of k.alanlar) a.add(h);
         for (const h of k.istisnalar) i.add(h);
+        if (k.kozmetik) kz.birlestir(k.kozmetik);
       }
     }
     this.alanlar = a;
     this.istisnalar = i;
+    this.kozmetik = kz;
+    this._cssOnbellek.clear();
     this.degisti();
+  }
+
+  /**
+   * Sayfaya enjekte edilecek kozmetik CSS.
+   *
+   * Sonuç ana makine adı başına önbelleğe alınıyor: aynı siteyi her açışta
+   * 13 binlik seçici kümesini yeniden taramak, gezinme başına ölçülebilir bir
+   * gecikme demekti.
+   */
+  kozmetikCss(host) {
+    if (!this.acik || !host) return '';
+    const hazir = this._cssOnbellek.get(host);
+    if (hazir !== undefined) return hazir;
+    const css = this.kozmetik.css(host);
+    // Önbellek sınırsız büyümesin; site sayısı bir oturumda binleri bulabilir.
+    if (this._cssOnbellek.size > CSS_ONBELLEK_SINIRI) this._cssOnbellek.clear();
+    this._cssOnbellek.set(host, css);
+    return css;
   }
 
   // Listeler açılıp kapatıldığında birleşik kümeyi yeniden kurar.
@@ -253,7 +321,9 @@ class ListeYoneticisi {
         aciklama: tanim.aciklama || '',
         url: tanim.url,
         ozel: !!tanim.ozel,
-        kural: k ? k.alanlar.size : 0,
+        // Kozmetik kurallar da sayılıyor: artık uygulanıyorlar, sayıdan
+        // düşürmek listeyi olduğundan küçük gösterirdi.
+        kural: k ? k.alanlar.size + (k.kozmetik ? k.kozmetik.sayi : 0) : 0,
         istisna: k ? k.istisnalar.size : 0,
         indirilme: u.indirilme || 0,
         surum: u.surum || '',
@@ -308,12 +378,21 @@ class ListeYoneticisi {
       if (y.metin.length > EN_BUYUK_BAYT) throw new Error('liste çok büyük');
 
       const c = ayristir(y.metin);
-      if (c.alanlar.length < EN_AZ_KURAL) throw new Error('liste tanınmadı ya da boş');
+      /*
+       * "Liste tanındı mı" sınavı kozmetik kuralları da sayıyor. Yalnızca ağ
+       * kurallarına bakmak, tamamı kozmetik olan listeleri (bunlar yaygın)
+       * "boş" sayıp reddederdi - kullanıcı listeyi ekler, hiçbir hata görmez,
+       * hiçbir şey de olmaz.
+       */
+      if (c.alanlar.length + kozmetikSayisi(c.kozmetik) < EN_AZ_KURAL) {
+        throw new Error('liste tanınmadı ya da boş');
+      }
 
       const kayit = {
         tanim,
         alanlar: new Set(c.alanlar),
         istisnalar: new Set(c.istisnalar),
+        kozmetik: KozmetikDepo.iceAktar(c.kozmetik),
         ustBilgi: {
           baslik: c.meta.baslik,
           surum: c.meta.surum,
@@ -329,7 +408,8 @@ class ListeYoneticisi {
       return true;
     } catch (e) {
       // Ağ yoksa ya da liste bozuksa elimizdeki son iyi kopya kullanılmaya devam eder.
-      const kayit = mevcut || { tanim, alanlar: new Set(), istisnalar: new Set(), ustBilgi: {} };
+      const kayit = mevcut
+        || { tanim, alanlar: new Set(), istisnalar: new Set(), kozmetik: new KozmetikDepo(), ustBilgi: {} };
       kayit.ustBilgi = { ...kayit.ustBilgi, hata: String(e.message || e).slice(0, 200) };
       this.kayitlar.set(tanim.id, kayit);
       return false;
@@ -341,10 +421,12 @@ class ListeYoneticisi {
       await fsp.mkdir(this.dizin, { recursive: true });
       const gecici = this._dosya(id) + '.tmp';
       await fsp.writeFile(gecici, JSON.stringify({
+        bicim: BICIM,
         url: kayit.tanim.url,
         ustBilgi: kayit.ustBilgi,
         alanlar: [...kayit.alanlar],
-        istisnalar: [...kayit.istisnalar]
+        istisnalar: [...kayit.istisnalar],
+        kozmetik: (kayit.kozmetik || new KozmetikDepo()).disaAktar()
       }), 'utf8');
       await fsp.rename(gecici, this._dosya(id));
     } catch (e) {

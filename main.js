@@ -480,6 +480,7 @@ function olaylariBagla(t) {
     t.favicon = null;
     if (!icSayfaMi(url)) t.hataAdresi = null;
     blocker.ustAlanAyarla(wcId, url);
+    kozmetigiUygula(wc, url);
     store.gecmiseEkle(url, t.baslik);
     tazele();
   });
@@ -849,6 +850,29 @@ async function kapanistaCerezleriSil() {
   })();
   const sinir = new Promise((coz) => setTimeout(coz, CEREZ_TEMIZLIK_SINIRI));
   await Promise.race([is.catch((e) => console.error('Çerezler silinemedi:', e.message)), sinir]);
+}
+
+/*
+ * Kozmetik filtreler: gizlenecek kutuların CSS'i.
+ *
+ * NEDEN did-navigate'te: gezinme işlendiği anda, belge daha ayrıştırılmadan
+ * enjekte ediliyor. dom-ready'yi beklemek reklam alanının bir kare görünüp
+ * kaybolmasına yol açardı - engellenmiş ama gözle görülen bir reklam.
+ *
+ * Engelleyici o site için kapatılmışsa CSS de uygulanmaz: "bu sitede kapat"
+ * demek, kullanıcının gördüğü her şeyi kapsamalı.
+ */
+function kozmetigiUygula(wc, url) {
+  if (!listeler || wc.isDestroyed()) return;
+  if (!store.ayarlar.engelleyiciAcik) return;
+  const host = hostAl(url);
+  if (!host) return;
+  if (store.siteIzinliMi(kokAlanAdi(host))) return;
+
+  const css = listeler.kozmetikCss(host);
+  if (!css) return;
+  // cssOrigin 'user': sayfanın kendi !important kuralları bunu ezemesin.
+  wc.insertCSS(css, { cssOrigin: 'user' }).catch(() => { /* gezinme değişmiş olabilir */ });
 }
 
 async function siteVerisiSil(origin, host) {
