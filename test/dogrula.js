@@ -292,7 +292,7 @@ esit('her kayıt geçerli alan adı biçiminde', LISTE.filter(d => !ALAN_BICIMI.
  * varsayimini dogrulayip gecmisti.
  */
 {
-  const { uaTemizle, kabulEdilenDiller } = require('../src/kullanici-araci');
+  const { uaTemizle } = require('../src/kullanici-araci');
 
   const OLCULEN =
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) '
@@ -328,12 +328,12 @@ esit('her kayıt geçerli alan adı biçiminde', LISTE.filter(d => !ALAN_BICIMI.
   esit('bos girdi cokmez', uaTemizle(''), '');
   esit('null girdi cokmez', uaTemizle(null), '');
 
-  // Accept-Language tek etiket olmamali.
-  esit('turkce dil listesi', kabulEdilenDiller('tr', 'tr-TR'), 'tr-TR,tr,en-US,en');
-  esit('ingilizce icin en tekrar etmez', kabulEdilenDiller('en', 'en-US'), 'en-US,en');
-  esit('bolge yoksa tek etiket tekrarlanmaz', kabulEdilenDiller('de', 'de'), 'de,en-US,en');
-  // Agirliklari Chromium ekliyor; biz eklersek iki kez agirlikli baslik cikiyor.
-  esit('agirlik icermiyor', /q=/.test(kabulEdilenDiller('tr', 'tr-TR')), false);
+  /*
+   * Accept-Language testleri KALDIRILDI: baslik degistirilince
+   * navigator.languages onunla birlikte degismiyor ve olusan tutarsizlik,
+   * duzeltmeye calisilan seyden daha guclu bir bot sinyali. Olcum ve gerekce
+   * src/kullanici-araci.js icinde.
+   */
 }
 
 if (hatalar.length) {

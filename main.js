@@ -22,7 +22,7 @@ const {
   genislikTahmini, olcumdenGenislik, xKonumu, xKonumuSol
 } = require('./src/menu-yerlesim');
 const { SertifikaDeposu } = require('./src/sertifikalar');
-const { uaTemizle, kabulEdilenDiller } = require('./src/kullanici-araci');
+const { uaTemizle } = require('./src/kullanici-araci');
 
 // Şema ayrıcalıkları uygulama hazır olmadan bildirilmeli.
 protocol.registerSchemesAsPrivileged([{
@@ -1059,17 +1059,20 @@ const IZIN_TURLERI = [
 
 let izinOnayAcik = false;
 
-function uaVeDilAyarla() {
+/*
+ * Accept-Language'a bilerek dokunulmuyor; sebebi src/kullanici-araci.js
+ * icindeki olcumde yazili. Kisaca: basligi degistirmek navigator.languages'i
+ * degistirmiyor ve ikisinin ayrismasi, tek etiketli bir baslıktan cok daha
+ * guclu bir bot sinyali uretiyor.
+ */
+function uaAyarla() {
   if (!ses) return;
-  ses.setUserAgent(
-    uaTemizle(ses.getUserAgent()),
-    kabulEdilenDiller(ceviri && ceviri.dil, ceviri && ceviri.yerel)
-  );
+  ses.setUserAgent(uaTemizle(ses.getUserAgent()));
 }
 
 function oturumKur() {
   ses = session.fromPartition(OTURUM);
-  uaVeDilAyarla();
+  uaAyarla();
 
   /*
    * Sertifikayı yalnızca İZLİYORUZ: -3 "Chromium'un kendi doğrulama sonucunu
@@ -1708,8 +1711,6 @@ function ipcKur() {
     if (p.anahtar === 'dil') {
       // Dil anında uygulanır: menü yeniden kurulur, arayüz yeni tabloyu alır.
       diliUygula();
-      // Accept-Language arayüz diline bağlı; dil değişince yenilenmeli.
-      uaVeDilAyarla();
       menuKur();
     }
     durumGonder();

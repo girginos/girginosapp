@@ -1,7 +1,7 @@
 'use strict';
 
 /*
- * Kullanıcı aracısı ve dil başlıkları.
+ * Kullanıcı aracısı dizesi.
  *
  * Electron varsayılan UA'ya hem "Electron/x" hem de uygulama adını ekler.
  * Önceki temizlik deseni adı `app.getName()` üzerinden kuruyordu ve SESSİZCE
@@ -27,21 +27,28 @@ function uaTemizle(ua) {
 }
 
 /*
- * Accept-Language tek bir etiketten ibaret olmamalı ("tr"). Gerçek tarayıcılar
- * bölge kodu ve yedek dillerle gönderir; tek etiket hem sıra dışı duruyor hem
- * de bazı sunucularda içerik pazarlığını bozuyor.
+ * ACCEPT-LANGUAGE'A NEDEN DOKUNMUYORUZ
  *
- * Yalnızca dil KODLARI döner, ağırlık (q=) YOK: Chromium ağırlıkları kendisi
- * ekliyor. Ağırlıklı bir dize verilince başlık "tr;q=0.9;q=0.9" gibi iki kez
- * ağırlıklı çıkıyor — bu ölçülerek görüldü, tahmin edilmedi.
+ * Başlık tek bir etiketten ibaret ("tr"); gerçek tarayıcılar bölge kodu ve
+ * yedek dillerle gönderdiği için burayı "düzeltmek" cazip görünüyor. Denendi
+ * ve ölçüldü — sonuç daha kötü:
+ *
+ *   setUserAgent'a dil listesi VERİLMEDİĞİNDE
+ *     Accept-Language     : tr
+ *     navigator.languages : ["tr"]          -> tutarlı
+ *
+ *   dil listesi VERİLDİĞİNDE
+ *     Accept-Language     : tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7
+ *     navigator.languages : ["tr"]          -> TUTARSIZ
+ *
+ * Electron başlığı değiştiriyor ama navigator.languages'i değiştirmiyor.
+ * Gerçek bir tarayıcıda bu ikisi her zaman aynıdır; ayrışması, sahte başlık
+ * kullanan otomasyonun klasik imzasıdır. Yani "tipik görünmek" için yapılan
+ * değişiklik, tek etiketli bir başlıktan çok daha güçlü bir bot sinyali
+ * üretiyor. Tutarlılık, tipiklikten önce gelir.
+ *
+ * Bunu değiştirmek isteyen: önce ikisini AYNI anda ayarlamanın bir yolunu
+ * bulun (Chromium'un --accept-lang anahtarı denendi, etkisi olmadı).
  */
-function kabulEdilenDiller(dil, yerel) {
-  const kok = String(dil || 'en').split('-')[0].toLowerCase();
-  const bolge = String(yerel || kok);
-  const liste = [bolge];
-  if (bolge !== kok) liste.push(kok);
-  if (kok !== 'en') liste.push('en-US', 'en');
-  return liste.join(',');
-}
 
-module.exports = { uaTemizle, kabulEdilenDiller };
+module.exports = { uaTemizle };
