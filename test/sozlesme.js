@@ -11,6 +11,9 @@ const kok = path.join(__dirname, '..');
 const oku = (f) => fs.readFileSync(path.join(kok, f), 'utf8');
 
 const preload = oku('preload.js');
+// Katman görünümünün ayrı ve dar bir köprüsü var; 'katman:*' kanalları
+// preload.js'te değil burada karşılanıyor.
+const katmanOnyukleme = oku('ui/katman-onyukleme.js');
 const main = oku('main.js');
 const app = oku('ui/app.js');
 const html = oku('ui/index.html');
@@ -25,9 +28,16 @@ function topla(metin, kalip) {
 
 const fark = (a, b) => [...a].filter((x) => !b.has(x));
 
-const preSend = topla(preload, /ipcRenderer\.send\('([^']+)'/g);
+const preSend = new Set([
+  ...topla(preload, /ipcRenderer\.send\('([^']+)'/g),
+  ...topla(katmanOnyukleme, /ipcRenderer\.send\('([^']+)'/g)
+]);
 const preInvoke = topla(preload, /ipcRenderer\.invoke\('([^']+)'/g);
-const preDinle = topla(preload, /dinle\('([^']+)'\)/g);
+const preDinle = new Set([
+  ...topla(preload, /dinle\('([^']+)'\)/g),
+  // katman-onyukleme.js dinlemeyi doğrudan ipcRenderer.on ile kuruyor
+  ...topla(katmanOnyukleme, /ipcRenderer\.on\('([^']+)'/g)
+]);
 const preApi = topla(preload, /^ {2}([A-Za-z][A-Za-z0-9]*):/gm);
 
 // main.js kanalları ya ipcMain.on/handle ile ya da gönderen doğrulaması yapan
@@ -43,7 +53,11 @@ const mainHandle = new Set([
 // Menü kısayolları kanalı doğrudan değil, uiye() sarmalayıcısıyla gönderiyor.
 const mainSend = new Set([
   ...topla(main, /webContents\.send\('([^']+)'/g),
-  ...topla(main, /uiye\('([^']+)'/g)
+  ...topla(main, /uiye\('([^']+)'/g),
+  // Ana sürecin arayüze gönderdiği kanalların çoğu bu sarmalayıcıdan geçiyor;
+  // desende yoktu, yani bu denetim uzun süre kanalların yalnızca bir kısmını
+  // görmüş. uiye() bunun kısaltması olduğu için ikisi de taranıyor.
+  ...topla(main, /uiyeGonder\('([^']+)'/g)
 ]);
 
 const appCagri = topla(app, /window\.pusula\.([A-Za-z0-9]+)/g);
@@ -102,8 +116,8 @@ denetimler.push(['style.css süslü parantez dengesi', derinlik === 0 ? [] : ['d
 // Dosyanın sonundaki kuralların gerçekten ayrıştığından emin olmak için
 // her bölümden bir seçici arıyoruz.
 const beklenenSeciciler = [
-  '.sekme', '.liste-kart', '.rozet-img', '.yerimi', '#indirmeMenu',
-  '.ayar-grup', '.istatistik', '#adresGoster', '[dir="rtl"]'
+  '.sekme', '.liste-kart', '.rozet-img', '.yerimi', '.ilerleme',
+  '#btnIndirmeler', '.ayar-grup', '.istatistik', '#adresGoster', '[dir="rtl"]'
 ];
 denetimler.push(['style.css bölümleri yerinde',
   beklenenSeciciler.filter((s) => !cssTemiz.includes(s))]);

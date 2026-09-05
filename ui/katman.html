@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'none'; img-src data: pusula-favicon:; style-src 'self' 'unsafe-inline'; script-src 'self'; base-uri 'none'; form-action 'none'">
+<title>katman</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="katman.css">
+</head>
+<body>
+  <!-- Sayfanın üstünde çizilen açılır kutu katmanı.
+       Arka örtü dışarı tıklamayı yakalar, kutu içeriği türe göre çizilir. -->
+  <div id="ortu"></div>
+  <div id="kutu" role="dialog" aria-modal="true"></div>
+  <script src="katman.js"></script>
+</body>
+</html>

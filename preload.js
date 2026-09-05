@@ -55,6 +55,7 @@ contextBridge.exposeInMainWorld('pusula', {
   yerImiSirala: (sirali) => ipcRenderer.invoke('yerimi:sirala', sirali),
   yerImiMenu: (url) => ipcRenderer.send('yerimi:menu', url),
   anaMenu: (konum) => ipcRenderer.send('menu:ana', konum),
+  indirmeMenu: (konum) => ipcRenderer.send('indirme:menu', konum),
   siteMenu: (konum) => ipcRenderer.send('site:menu', konum),
   yerImiDuzenleDinle: dinle('yerimi-duzenle'),
   ayarDegistir: (anahtar, deger) => ipcRenderer.invoke('ayar:degistir', { anahtar, deger }),

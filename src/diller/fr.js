@@ -287,6 +287,9 @@ module.exports = {
     'ayar.temaAciklama': 'L’interface, les pages internes et les menus suivent ce choix.',
     'ayar.temaSistem': 'Comme le système',
     'ayar.temaAcik': 'Clair',
-    'ayar.temaKoyu': 'Sombre'
+    'ayar.temaKoyu': 'Sombre',
+    /* --- katman: izin kutusu --- */
+    'dialog.izinIstiyor': 'demande :',
+    'izin.storage-access': 'accès au stockage'
   }
 };

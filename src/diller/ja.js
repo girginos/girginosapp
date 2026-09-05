@@ -287,6 +287,9 @@ module.exports = {
     'ayar.temaAciklama': '画面・内蔵ページ・メニューがこの設定に従います。',
     'ayar.temaSistem': 'システムに合わせる',
     'ayar.temaAcik': 'ライト',
-    'ayar.temaKoyu': 'ダーク'
+    'ayar.temaKoyu': 'ダーク',
+    /* --- katman: izin kutusu --- */
+    'dialog.izinIstiyor': 'が次を要求しています:',
+    'izin.storage-access': 'ストレージへのアクセス'
   }
 };

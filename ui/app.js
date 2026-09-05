@@ -13,7 +13,6 @@ const el = {
   gecmis: $('btnGecmis'), indirmeler: $('btnIndirmeler'), ayarlar: $('btnAyarlar'),
   yerImleriCubugu: $('yerImleriCubugu'),
   oneriler: $('oneriler'),
-  indirmeMenu: $('indirmeMenu'),
   bulCubugu: $('bulCubugu'), bulGirdi: $('bulGirdi'), bulSayac: $('bulSayac'),
   bulOnceki: $('bulOnceki'), bulSonraki: $('bulSonraki'), bulKapat: $('bulKapat'),
   panel: $('panel'), panelAd: $('panelAd'), panelArac: $('panelArac'),
@@ -447,7 +446,6 @@ function ciz() {
   // Geçmiş ve Ayarlar panellerinde girdi alanları var; durum yayını saniyede
   // birkaç kez geldiği için bunları yeniden çizmek kullanıcının yazdığını siler.
   if (acikPanel === 'indirmeler' || acikPanel === 'yerImleri') panelCiz();
-  indirmeMenusuCiz();   // indirme ilerlemesi canlı görünsün
   indirmeGostergesiCiz();
 }
 
@@ -600,7 +598,6 @@ function oneriUygula(i) {
 el.adres.addEventListener('focus', () => {
   adresDuzenleniyor = true;
   el.adresGoster.hidden = true;   // düzenlerken gerçek metin görünsün
-  indirmeMenusuKapat();           // açık menü adres çubuğunun altında kalmasın
   el.adres.select();
 });
 el.adresGoster.addEventListener('mousedown', (e) => { e.preventDefault(); el.adres.focus(); });
@@ -654,18 +651,16 @@ el.kalkan.addEventListener('click', () => {
 // Kilit simgesi Chrome'daki gibi site bilgisi menüsünü açar.
 el.kilit.addEventListener('click', () => {
   const r = el.kilit.getBoundingClientRect();
-  indirmeMenusuKapat();
   onerileriKapat();
   window.pusula.siteMenu({ sol: r.left, y: r.bottom + 6 });
 });
 
 el.gecmis.addEventListener('click', () => panelAc('gecmis'));
-el.indirmeler.addEventListener('click', () => indirmeMenusuDegistir());
+el.indirmeler.addEventListener('click', () => indirmeMenusuAc());
 // ≡ düğmesi ana menüyü açar. Menü yerel (native) çiziliyor: sayfa görünümü
 // arayüzün üstünde bir katman olduğu için HTML açılır menü altında kalırdı.
 el.ayarlar.addEventListener('click', () => {
   const r = el.ayarlar.getBoundingClientRect();
-  indirmeMenusuKapat();
   onerileriKapat();
   // Sağ kenar hizalaması için düğmenin sağ kenarını gönderiyoruz.
   window.pusula.anaMenu({ sag: r.right, y: r.bottom + 2 });
@@ -675,101 +670,16 @@ el.ayarlar.addEventListener('click', () => {
 
 const indirmeDurumu = (d) => cev('indirme.' + d);
 
-function indirmeMenusuDegistir() {
-  if (el.indirmeMenu.hidden) indirmeMenusuAc(); else indirmeMenusuKapat();
-}
-
-function indirmeMenusuKapat() {
-  el.indirmeMenu.hidden = true;
-  el.indirmeMenu.replaceChildren();
-  el.indirmeler.classList.remove('etkin');
-}
-
+/*
+ * İndirilenler kutusu artık chrome içinde değil, sayfanın üstündeki katmanda
+ * çiziliyor (bkz. main.js katmanGoster). Chrome içinde açıldığında paneli
+ * büyütüp sayfayı aşağı itiyordu. Burada yalnızca düğmenin konumunu ölçüp
+ * ana sürece bildiriyoruz.
+ */
 function indirmeMenusuAc() {
-  onerileriKapat();
-  el.indirmeMenu.hidden = false;
-  el.indirmeler.classList.add('etkin');
-  indirmeMenusuCiz();
-}
-
-function indirmeMenusuCiz() {
-  if (el.indirmeMenu.hidden) return;
-  el.indirmeMenu.replaceChildren();
-
-  // Satır chrome akışında olduğu için tüm genişliği kaplıyor; görünen panel
-  // düğmenin altına yaslanan sabit genişlikte bir kart.
-  const kart = document.createElement('div');
-  kart.className = 'menu-kart';
-  el.indirmeMenu.appendChild(kart);
-
-  const baslik = document.createElement('div');
-  baslik.className = 'menu-baslik';
-  baslik.textContent = cev('panel.indirilenler');
-  const kapat = document.createElement('button');
-  kapat.className = 'ikon kucuk';
-  kapat.title = cev('bul.kapat');
-  kapat.innerHTML = '<svg viewBox="0 0 16 16"><path d="M4.5 4.5l7 7M11.5 4.5l-7 7"/></svg>';
-  kapat.addEventListener('click', indirmeMenusuKapat);
-  baslik.appendChild(kapat);
-  kart.appendChild(baslik);
-
-  const son = (durum.indirmeler || []).slice(0, 10);
-  if (!son.length) {
-    const b = document.createElement('div');
-    b.className = 'menu-bos';
-    b.textContent = cev('indirme.bos');
-    kart.appendChild(b);
-    return;
-  }
-
-  for (const i of son) {
-    const s = document.createElement('div');
-    s.className = 'menu-satir' + (i.calistirilabilir ? ' riskli' : '');
-    s.title = i.url;
-
-    const ikon = document.createElement('span');
-    ikon.className = 'menu-ikon';
-    ikon.innerHTML = i.calistirilabilir ? SIMGE.uyari : SIMGE.indir;
-
-    const metin = document.createElement('div');
-    metin.className = 'menu-metin';
-    const ad = document.createElement('div');
-    ad.className = 'menu-ad';
-    ad.textContent = temizMetin(i.ad);
-    const alt = document.createElement('div');
-    alt.className = 'menu-alt';
-    alt.textContent = indirmeDurumu(i.durum) +
-      (i.toplam > 0 ? ' · ' + boyutMetni(i.alinan) + ' / ' + boyutMetni(i.toplam) : '');
-    metin.append(ad, alt);
-
-    if (i.durum === 'devam' && i.toplam > 0) {
-      const p = document.createElement('div');
-      p.className = 'ilerleme';
-      const ic = document.createElement('div');
-      ic.style.width = Math.round((i.alinan / i.toplam) * 100) + '%';
-      p.appendChild(ic);
-      metin.appendChild(p);
-    }
-
-    s.append(ikon, metin);
-
-    if (i.durum === 'tamam') {
-      const klasor = document.createElement('button');
-      klasor.className = 'ikon kucuk';
-      klasor.title = cev('indirme.klasor');
-      klasor.innerHTML = SIMGE.klasor;
-      klasor.addEventListener('click', (e) => { e.stopPropagation(); window.pusula.indirmeKlasor(i.id); });
-      s.appendChild(klasor);
-      s.addEventListener('click', () => window.pusula.indirmeAc(i.id));
-    }
-    kart.appendChild(s);
-  }
-
-  const tumu = document.createElement('button');
-  tumu.className = 'menu-alt-dugme';
-  tumu.textContent = cev('indirme.tumunuGoster');
-  tumu.addEventListener('click', () => { indirmeMenusuKapat(); panelAc('indirmeler'); });
-  kart.appendChild(tumu);
+  const r = el.indirmeler.getBoundingClientRect();
+  const sagKenar = Math.max(0, document.documentElement.clientWidth - r.right);
+  window.pusula.indirmeMenu({ sagKenar });
 }
 
 /* ---------------- sayfada bul ---------------- */
@@ -804,7 +714,6 @@ el.bulKapat.addEventListener('click', bulmaKapat);
 /* ---------------- panel ---------------- */
 
 function panelAc(ad) {
-  indirmeMenusuKapat();
   acikPanel = ad;
   el.panel.hidden = false;
   window.pusula.katmanBildir(true);
@@ -1359,7 +1268,7 @@ window.pusula.panelAcDinle((ad) => {
 
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
-    if (!el.indirmeMenu.hidden) { indirmeMenusuKapat(); return; }
+    // Indirilenler kutusu artik katmanda; Escape'i o kendi icinde yakaliyor.
     if (acikPanel) { panelKapat(); return; }
     if (!el.bulCubugu.hidden && document.activeElement !== el.bulGirdi) { bulmaKapat(); return; }
   }

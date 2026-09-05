@@ -300,6 +300,9 @@ module.exports = {
     'ayar.temaAciklama': 'Arayüz, iç sayfalar ve menüler bu seçime göre renklenir.',
     'ayar.temaSistem': 'Sistemle aynı',
     'ayar.temaAcik': 'Açık',
-    'ayar.temaKoyu': 'Koyu'
+    'ayar.temaKoyu': 'Koyu',
+    /* --- katman: izin kutusu --- */
+    'dialog.izinIstiyor': 'şunu istiyor:',
+    'izin.storage-access': 'depolama erişimi'
   }
 };

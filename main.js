@@ -212,9 +212,100 @@ function uiyeGonder(kanal, veri) {
   win.webContents.send(kanal, veri);
 }
 
+/* ---------------------------------------------------------------- */
+/* Açılır kutu katmanı                                               */
+/* ---------------------------------------------------------------- */
+
+/*
+ * Sayfa görünümü, arayüz penceresinin üstünde duran yerel bir katman. Bu
+ * yüzden chrome içindeki hiçbir HTML kutusu sayfanın üzerine binemiyor:
+ * indirilenler paneli chrome'u büyütüp sayfayı aşağı itiyordu, izin isteği de
+ * yerel işletim sistemi kutusu olmak zorundaydı.
+ *
+ * Çözüm, sayfa görünümlerinden SONRA eklenen ikinci bir görünüm. Alt görünümler
+ * eklenme sırasına göre üst üste bindiği için bu görünüm sayfanın üstünde
+ * çizilir. Yalnızca bir kutu açıkken var; kapanınca kaldırılıyor, böylece
+ * sayfa etkileşimi geri geliyor.
+ */
+// Boyut metni arayuzde de var; katman icerigi ana surecte kuruldugu icin
+// burada da gerekiyor. Tek satirlik bir bicimlendirme, ortak modul acmiyoruz.
+function boyutMetni(bayt) {
+  if (!bayt || bayt < 0) return '';
+  const birim = ['B', 'KB', 'MB', 'GB'];
+  let i = 0, n = bayt;
+  while (n >= 1024 && i < birim.length - 1) { n /= 1024; i++; }
+  return (i === 0 ? n : n.toFixed(1)) + ' ' + birim[i];
+}
+
+let katmanGorunum = null;
+let katmanHazirMi = false;
+let katmanBekleyenIcerik = null;
+let katmanIzinKarari = null;   // izin kutusu açıkken çözülecek söz
+
+function katmanOlustur() {
+  if (katmanGorunum) return katmanGorunum;
+  const g = new WebContentsView({
+    webPreferences: {
+      session: ses,
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      webviewTag: false,
+      spellcheck: false,
+      safeDialogs: true,
+      transparent: true,
+      preload: path.join(UI_DIR, 'katman-onyukleme.js')
+    }
+  });
+  g.setBackgroundColor('#00000000');
+
+  const wc = g.webContents;
+  // Katman yalnızca kendi yerel sayfasını gösterir; hiçbir yere gitmez.
+  wc.on('will-navigate', (e) => e.preventDefault());
+  wc.setWindowOpenHandler(() => ({ action: 'deny' }));
+
+  wc.loadFile(path.join(UI_DIR, 'katman.html'));
+  katmanGorunum = g;
+  return g;
+}
+
+function katmanGoster(icerik) {
+  if (!win || win.isDestroyed()) return;
+  const g = katmanOlustur();
+  const { width, height } = win.getContentBounds();
+
+  // Sayfa görünümlerinin üstünde kalması için her açılışta yeniden ekleniyor:
+  // arada yeni sekme açıldıysa onun görünümü sonradan eklenmiş olurdu.
+  try { win.contentView.removeChildView(g); } catch { /* ekli değildi */ }
+  win.contentView.addChildView(g);
+  g.setBounds({ x: 0, y: chromeYukseklik, width, height: Math.max(0, height - chromeYukseklik) });
+
+  if (katmanHazirMi) katmanGorunum.webContents.send('katman:icerik', icerik);
+  else katmanBekleyenIcerik = icerik;      // sayfa yüklenince gönderilecek
+}
+
+function katmanGizle() {
+  // Açık bir izin isteği varsa kapanış reddetme sayılır: fail-closed.
+  if (katmanIzinKarari) {
+    const coz = katmanIzinKarari;
+    katmanIzinKarari = null;
+    coz({ izinVer: false, hatirla: false });
+  }
+  if (!katmanGorunum || !win || win.isDestroyed()) return;
+  try { win.contentView.removeChildView(katmanGorunum); } catch { /* zaten yok */ }
+}
+
+function katmanAcikMi() {
+  return !!(katmanGorunum && win && !win.isDestroyed()
+    && win.contentView.children.includes(katmanGorunum));
+}
+
 function yerlesimGuncelle() {
   if (!win || win.isDestroyed()) return;
   const { width, height } = win.getContentBounds();
+  if (katmanAcikMi()) {
+    katmanGorunum.setBounds({ x: 0, y: chromeYukseklik, width, height: Math.max(0, height - chromeYukseklik) });
+  }
   const y = katmanAcik ? height : chromeYukseklik;
   for (const t of sekmeler.values()) {
     if (t.view.webContents.isDestroyed()) continue;
@@ -1021,18 +1112,28 @@ function oturumKur() {
     if (izinOnayAcik) return callback(false);
     izinOnayAcik = true;
     try {
-      const { response, checkboxChecked } = await dialog.showMessageBox(win, {
-        type: 'question',
-        buttons: [cev('dialog.reddet'), cev('dialog.izinVer')],
-        defaultId: 0,
-        cancelId: 0,
-        title: cev('dialog.izinBaslik'),
-        message: cev('dialog.izinMesaj', { origin }),
-        detail: cev('izin.' + izin),
-        checkboxLabel: cev('dialog.izinHatirla')
+      // Yerel işletim sistemi kutusu yerine sayfanın üstündeki katman: tema
+      // uyumlu, adres çubuğunun altına yaslanıyor, pencereyi kilitlemiyor.
+      // Kutu kapatılırsa (Escape ya da dışarı tıklama) karar RET olur.
+      const karar = await new Promise((coz) => {
+        katmanIzinKarari = coz;
+        katmanGoster({
+          tur: 'izin',
+          yon: 'sol',
+          ust: 6,
+          kenar: 8,
+          genislik: 340,
+          baslik: cev('dialog.izinBaslik'),
+          kaynak: origin,
+          istiyor: cev('dialog.izinIstiyor'),
+          ne: cev('izin.' + izin),
+          hatirlaMetni: cev('dialog.izinHatirla'),
+          reddetMetni: cev('dialog.reddet'),
+          izinMetni: cev('dialog.izinVer')
+        });
       });
-      if (checkboxChecked) store.izinKaydet(origin, izin, response === 1 ? 'izin' : 'ret');
-      callback(response === 1);
+      if (karar.hatirla) store.izinKaydet(origin, izin, karar.izinVer ? 'izin' : 'ret');
+      callback(karar.izinVer);
     } finally {
       izinOnayAcik = false;
     }
@@ -1343,6 +1444,70 @@ function ipcKur() {
   // içeriği koordinatı sayılır.
   on('menu:ana', (_e, konum) => { anaMenuGoster(konum).catch(() => {}); });
   on('site:menu', (_e, konum) => { siteMenusuGoster(konum).catch(() => {}); });
+
+  /* ---- açılır kutu katmanı ---- */
+
+  on('katman:hazir', () => {
+    katmanHazirMi = true;
+    if (katmanBekleyenIcerik && katmanGorunum) {
+      katmanGorunum.webContents.send('katman:icerik', katmanBekleyenIcerik);
+      katmanBekleyenIcerik = null;
+    }
+  });
+
+  on('katman:kapat', () => katmanGizle());
+
+  on('katman:indirme-klasor', (_e, id) => {
+    const k = indirmeBul(id);
+    if (k) shell.showItemInFolder(k.yol);
+  });
+
+  on('katman:indirme-ac', (e, id) => {
+    katmanGizle();
+    ipcMain.emit('indirme:ac', e, id);
+  });
+
+  on('katman:tumunu-goster', () => {
+    katmanGizle();
+    uiyeGonder('panel-ac', 'indirmeler');
+  });
+
+  on('katman:izin', (_e, karar) => {
+    const coz = katmanIzinKarari;
+    katmanIzinKarari = null;
+    katmanGizle();
+    if (coz) coz({ izinVer: !!(karar && karar.izinVer), hatirla: !!(karar && karar.hatirla) });
+  });
+
+  // İndirilenler kutusu: arayüz düğmenin konumunu ölçüp gönderiyor.
+  on('indirme:menu', (_e, konum) => {
+    if (katmanAcikMi()) return katmanGizle();      // ikinci tıklama kapatır
+    const son = indirmeler.slice(0, 10).map((i) => ({
+      id: i.id,
+      ad: i.ad,
+      alt: cev('indirme.' + i.durum) +
+        (i.toplam > 0 ? ' · ' + boyutMetni(i.alinan) + ' / ' + boyutMetni(i.toplam) : ''),
+      riskli: !!i.calistirilabilir,
+      acilabilir: i.durum === 'tamam',
+      yuzde: i.durum === 'devam' && i.toplam > 0
+        ? Math.round((i.alinan / i.toplam) * 100)
+        : null
+    }));
+    const genislik = 380;
+    katmanGoster({
+      tur: 'indirmeler',
+      yon: 'sag',
+      ust: 6,
+      kenar: Math.max(6, Math.round((konum && konum.sagKenar) || 8)),
+      genislik,
+      baslik: cev('panel.indirilenler'),
+      bosMetni: cev('indirme.bos'),
+      tumunuMetni: cev('indirme.tumunuGoster'),
+      klasorMetni: cev('indirme.klasor'),
+      kapatMetni: cev('bul.kapat'),
+      ogeler: son
+    });
+  });
 
   on('yerimi:menu', (_e, url) => {
     const secili = url ? store.veri.yerImleri.find(y => y.url === url) : null;

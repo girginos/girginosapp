@@ -287,6 +287,9 @@ module.exports = {
     'ayar.temaAciklama': '界面、内置页面和菜单都会跟随此设置。',
     'ayar.temaSistem': '跟随系统',
     'ayar.temaAcik': '浅色',
-    'ayar.temaKoyu': '深色'
+    'ayar.temaKoyu': '深色',
+    /* --- katman: izin kutusu --- */
+    'dialog.izinIstiyor': '请求使用：',
+    'izin.storage-access': '存储访问权限'
   }
 };

@@ -564,13 +564,6 @@ svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width:
 
 /* Satır chrome akışında olduğu için tüm genişliği kaplar; görünen panel
    düğmenin altına yaslanmış sabit genişlikte bir karttır. */
-#indirmeMenu {
-  display: flex;
-  justify-content: flex-end;
-  padding: 0 8px 10px;
-  background: var(--sekme-aktif);
-}
-#indirmeMenu[hidden] { display: none; }
 
 .menu-kart {
   width: min(380px, 100%);
@@ -824,4 +817,21 @@ svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width:
 @media (prefers-reduced-motion: reduce) {
   #btnIndirmeler.iniyor svg,
   #btnIndirmeler.belirsiz::before { animation: none; }
+}
+
+/* İndirme satırındaki ilerleme çubuğu.
+   Bu öğe app.js'te baştan beri üretiliyordu ama hiçbir kuralı yoktu; yani
+   yükseklik alamayıp görünmez kalıyordu. */
+.ilerleme {
+  height: 3px;
+  margin-top: 5px;
+  border-radius: 2px;
+  background: var(--zemin2);
+  overflow: hidden;
+}
+.ilerleme > div {
+  height: 100%;
+  border-radius: 2px;
+  background: var(--vurgu);
+  transition: width 200ms linear;
 }
