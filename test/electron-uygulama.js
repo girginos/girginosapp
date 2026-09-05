@@ -39,6 +39,7 @@ function bak(ad, bulunan, beklenen) {
 
 const raporlar = [];
 const vekileGelen = [];
+let sayacIstek = 0;
 
 /*
  * Sayfa kendi durumunu bildiriyor. CDP'ye bağlanmak yerine bu yol seçildi:
@@ -112,6 +113,26 @@ const sunucu = http.createServer((istek, yanit) => {
   if (u.pathname === '/cerceve') return gonder(CERCEVE, 'text/html; charset=utf-8');
   if (u.pathname === '/uc-taraf') return gonder(UC_TARAF, 'text/html; charset=utf-8');
   if (u.pathname === '/cerez') return gonder(CEREZ_SAYFASI, 'text/html; charset=utf-8');
+
+  /*
+   * Onbellek olcumu. sayac.js her istekte ARTAN bir sayi donduruyor ve uzun
+   * omurlu olarak onbelleklenebiliyor. Sayfa o sayiyi basligina yaziyor:
+   * onbellekten gelirse sayi AYNI kalir, agdan gelirse artar. Yani "onbellek
+   * gercekten sifirlandi mi" sorusu tek bir sayiyla olculebiliyor.
+   */
+  if (u.pathname === '/onbellek') {
+    return gonder('<!doctype html><meta charset="utf-8"><title>bekleniyor</title>'
+      + '<script src="/sayac.js"></script>', 'text/html; charset=utf-8');
+  }
+  if (u.pathname === '/sayac.js') {
+    sayacIstek++;
+    yanit.writeHead(200, {
+      'Content-Type': 'text/javascript',
+      'Cache-Control': 'public, max-age=3600, immutable'
+    });
+    return yanit.end('document.title = "sayac-' + sayacIstek + '";');
+  }
+  if (u.pathname === '/bos') return gonder('<!doctype html><title>bos</title>', 'text/html; charset=utf-8');
   if (u.pathname.startsWith('/rapor')) {
     raporlar.push({ yol: u.pathname, veri: Object.fromEntries(u.searchParams) });
     yanit.setHeader('Access-Control-Allow-Origin', '*');
@@ -128,6 +149,60 @@ const vekil = http.createServer((istek, yanit) => {
 });
 
 const bekle = (ms) => new Promise((c) => setTimeout(c, ms));
+
+/*
+ * ARAYUZ PENCERESINDE JAVASCRIPT CALISTIRMA.
+ *
+ * Arac cubugundaki dugmeler sayfadan tetiklenemiyor - ayri bir webContents ve
+ * aralarinda kopru yok. Onlari olcmenin tek yolu tarayiciyi disaridan
+ * surmek. Uygulama --remote-debugging-port ile aciliyor, hedef listesi HTTP
+ * ile okunuyor, degerlendirme WebSocket uzerinden yapiliyor (Node 24'te
+ * WebSocket kuresel).
+ *
+ * Bu olmadan "dugme bagli mi" sorusu olculemezdi ve dugme hicbir sey yapmasa
+ * da butun testler yesil kalirdi.
+ */
+async function arayuzHedefi(port, sure = 20000) {
+  for (let i = 0; i < Math.ceil(sure / 400); i++) {
+    try {
+      const y = await fetch('http://127.0.0.1:' + port + '/json/list');
+      const hedefler = await y.json();
+      const h = hedefler.find((t) => t.type === 'page' && /ui[/\\]index\.html/.test(t.url || ''));
+      if (h && h.webSocketDebuggerUrl) return h;
+    } catch { /* surec henuz dinlemiyor olabilir */ }
+    await bekle(400);
+  }
+  return null;
+}
+
+function cdpDegerlendir(wsUrl, ifade) {
+  return new Promise((coz, red) => {
+    let ws;
+    try { ws = new WebSocket(wsUrl); } catch (e) { return red(e); }
+    const zaman = setTimeout(() => { try { ws.close(); } catch { /* kapali */ } red(new Error('CDP zaman asimi')); }, 15000);
+    ws.onerror = (e) => { clearTimeout(zaman); red(new Error('CDP baglanti hatasi: ' + (e && e.message))); };
+    ws.onopen = () => {
+      ws.send(JSON.stringify({
+        id: 1,
+        method: 'Runtime.evaluate',
+        params: { expression: ifade, awaitPromise: true, returnByValue: true }
+      }));
+    };
+    ws.onmessage = (olay) => {
+      let veri;
+      try { veri = JSON.parse(olay.data); } catch { return; }
+      if (veri.id !== 1) return;
+      clearTimeout(zaman);
+      try { ws.close(); } catch { /* kapali */ }
+      if (veri.error) return red(new Error('CDP hatasi: ' + JSON.stringify(veri.error)));
+      const r = veri.result && veri.result.result;
+      if (veri.result && veri.result.exceptionDetails) {
+        return red(new Error('sayfa istisnasi: ' + JSON.stringify(veri.result.exceptionDetails.text)));
+      }
+      coz(r ? r.value : undefined);
+    };
+  });
+}
 
 function raporBekle(yol, sure) {
   const bitis = Date.now() + sure;
@@ -185,9 +260,15 @@ function ayarYaz(profil, ek) {
   }), 'utf8');
 }
 
+const HATA_AYIKLAMA_PORTU = 9411;
+
 function uygulamayiCalistir(profil, adres) {
   const electron = require('electron');
-  const cocuk = spawn(electron, ['.', adres, '--user-data-dir=' + profil], {
+  const cocuk = spawn(electron, [
+    '.', adres,
+    '--user-data-dir=' + profil,
+    '--remote-debugging-port=' + HATA_AYIKLAMA_PORTU
+  ], {
     cwd: KOK,
     stdio: ['ignore', 'pipe', 'pipe'],
     env: { ...process.env, ELECTRON_ENABLE_LOGGING: '' }
@@ -303,6 +384,43 @@ function kapat(cocuk) {
   bak('ayar kapaliyken cerez durur',
     /oturum=DENEME-1/.test((kontrolRapor && kontrolRapor.veri.c) || ''), true);
   await kapat(dort.cocuk);
+
+  /* --- onbellek sifirlama dugmesi --- */
+  ayarYaz(profil, {});
+  const bes = uygulamayiCalistir(profil, 'http://127.0.0.1:' + SUNUCU_PORT + '/onbellek');
+  const hedef = await arayuzHedefi(HATA_AYIKLAMA_PORTU);
+  bak('arayuz penceresi hata ayiklamaya acik', !!hedef, true);
+
+  if (hedef) {
+    const ws = hedef.webSocketDebuggerUrl;
+    // Dugme gercekten var mi? Yoksa asagidaki tiklama sessizce hicbir sey yapardi.
+    const dugmeVar = await cdpDegerlendir(ws, '!!document.getElementById("btnOnbellek")').catch(() => false);
+    bak('onbellek dugmesi arayuzde var', dugmeVar, true);
+
+    /*
+     * KONTROL: once sayfadan cikip geri donuluyor. Bu normal bir gezinme, yani
+     * sayac.js ONBELLEKTEN gelmeli ve sayi DEGISMEMELI. Bu adim olmadan
+     * asagidaki "sayi artti" sonucu, onbellegin zaten calismadigi anlamina da
+     * gelebilirdi.
+     */
+    const oncekiBaslik = await cdpDegerlendir(ws,
+      'window.pusula.git("http://127.0.0.1:' + SUNUCU_PORT + '/bos"), "gitti"').catch(() => null);
+    await bekle(1500);
+    await cdpDegerlendir(ws,
+      'window.pusula.git("http://127.0.0.1:' + SUNUCU_PORT + '/onbellek"), "gitti"').catch(() => null);
+    await bekle(2000);
+    const sayacOnce = sayacIstek;
+    bak('kontrol: normal gezinmede onbellek kullanildi', sayacOnce, 1);
+
+    if (dugmeVar) {
+      await cdpDegerlendir(ws, 'document.getElementById("btnOnbellek").click(), "tiklandi"');
+      await bekle(3000);
+      // Onbellek gercekten bosaldiysa sayac.js aga cikar ve sayi artar.
+      bak('onbellek sifirlandi (kaynak yeniden indirildi)', sayacIstek > sayacOnce, true);
+    }
+    void oncekiBaslik;
+  }
+  await kapat(bes.cocuk);
 
   console.log('\n' + sonuc.join('\n'));
   const hata = sonuc.filter((s) => s.startsWith('  HATA')).length;
