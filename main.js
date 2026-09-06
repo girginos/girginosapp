@@ -5,6 +5,16 @@ const {
   dialog, Menu, clipboard, nativeTheme, protocol
 } = require('electron');
 const path = require('node:path');
+
+/*
+ * ÇÖKME RAPORLAMA (yerel). Bazı ağır sayfalar (ör. consent.google.com) Chromium'da
+ * kararsız native çökme (0xC0000005) veriyor. crashReporter minidump'ları
+ * userData/Crashpad altına yazar (sunucuya GÖNDERİLMEZ, gizlilik korunur); bir
+ * çökme olursa yığın sembolize edilip kök neden bulunabilir.
+ */
+try {
+  require('electron').crashReporter.start({ uploadToServer: false, compress: true });
+} catch (e) { /* çökme raporlama kritik değil */ }
 const fs = require('node:fs');
 const { pathToFileURL } = require('node:url');
 
@@ -1003,6 +1013,9 @@ async function kapanistaCerezleriSil() {
  * demek, kullanıcının gördüğü her şeyi kapsamalı.
  */
 function kozmetikCssAl(url) {
+  // GEÇİCİ: kozmetik CSS enjeksiyonu devre dışı (adblock yapısı kaldırıldı;
+  // yerine açık kaynak engelleyici gelecek). Ağ engellemesi çalışmaya devam eder.
+  if (!ADBLOCK_SAYFA_ENJEKSIYON) return '';
   if (!listeler || !store.ayarlar.engelleyiciAcik) return '';
   const host = hostAl(url);
   if (!host) return '';
@@ -1429,6 +1442,17 @@ function webrtcPolitikasi() {
 const ANTI_ADBLOCK_ID = 'anti-adblock';
 
 /*
+ * SAYFA-ENJEKSİYON ADBLOCK GEÇİCİ OLARAK KAPALI.
+ *
+ * Kozmetik CSS + scriptlet + anti-adblock preload, chromewebstore gibi
+ * sayfalarda Chromium'u native çökertiyordu (bkz. antiAdblockKur). Kararlılık
+ * için sayfaya enjeksiyon yapan tüm adblock katmanı kapatıldı; ağ (alan adı)
+ * engellemesi güvenli olduğu için açık kalıyor. Yerine açık kaynak bir
+ * engelleyici motoru entegre edilecek; o zaman bu bayrak kaldırılacak.
+ */
+const ADBLOCK_SAYFA_ENJEKSIYON = false;
+
+/*
  * Bir host için çalışacak scriptlet eşleşmeleri. Sekme preload'ı her gezinmede
  * 'betik:coz' sendSync'iyle burayı çağırıyor; yalnızca O host'a ait küçük liste
  * dönüyor (~1 KB). Kuralları her sayfaya gömen eski yol ~590 KB'tı ve tarayıcıyı
@@ -1438,6 +1462,7 @@ const ANTI_ADBLOCK_ID = 'anti-adblock';
  */
 function betikEslesenler(host) {
   try {
+    if (!ADBLOCK_SAYFA_ENJEKSIYON) return [];   // GEÇİCİ: scriptlet enjeksiyonu devre dışı
     if (!host || !store.ayarlar.engelleyiciAcik) return [];
     const kok = kokAlanAdi(host);
     if (kok && store.siteIzinliMi(kok)) return [];   // bu sitede engelleyici kapalı
@@ -1460,22 +1485,26 @@ function betikEslesenler(host) {
  * Yazma başarısız olursa (disk) karşı-önlem sessizce devre dışı kalırdı; hata
  * loglanıyor ve uygulama yine de açılıyor - karşı-önlem kritik değil.
  */
+/*
+ * GEÇİCİ OLARAK DEVRE DIŞI.
+ *
+ * Anti-adblock preload'ı (ANA_DUNYA_KODU: getComputedStyle Proxy'si + prototip
+ * getter override'ları) ölçülerek chromewebstore gibi sayfalarda Chromium'u
+ * NATIVE çökertiyordu (0xC0000005). Kanıt: Windows Olay Günlüğü'nde çökmeler
+ * yalnız 0.4.5/0.4.6/0.4.7'de; paketlenmiş yapıda preload KAPATILINCA çökme
+ * duruyor (2/2). Kararlılık için preload artık kaydedilmiyor ve varsa eski dosya
+ * + kaydı temizleniyor. Yerine ileride açık kaynak, savaşta denenmiş bir
+ * engelleyici (ör. Ghostery/Cliqz adblocker motoru) entegre edilecek.
+ */
 function antiAdblockKur() {
   try {
-    const yol = path.join(app.getPath('userData'), 'anti-adblock-preload.js');
-    fs.writeFileSync(yol, preloadKaynagi(betikKurulumKodu()), 'utf8');
-
-    if (typeof ses.registerPreloadScript === 'function') {
+    if (typeof ses.unregisterPreloadScript === 'function') {
       const kayitli = (ses.getPreloadScripts ? ses.getPreloadScripts() : [])
         .some((p) => p.id === ANTI_ADBLOCK_ID);
-      if (!kayitli) ses.registerPreloadScript({ type: 'frame', id: ANTI_ADBLOCK_ID, filePath: yol });
-    } else {
-      const mevcut = ses.getPreloads ? ses.getPreloads() : [];
-      if (!mevcut.includes(yol)) ses.setPreloads([...mevcut, yol]);
+      if (kayitli) ses.unregisterPreloadScript(ANTI_ADBLOCK_ID);
     }
-  } catch (e) {
-    console.error('Anti-adblock karşı-önlemi kurulamadı:', e.message);
-  }
+    fs.rmSync(path.join(app.getPath('userData'), 'anti-adblock-preload.js'), { force: true });
+  } catch (e) { /* geç */ }
 }
 
 /*
