@@ -270,7 +270,7 @@ const ANA_DUNYA_KODU = '(' + anaDunyaKodu.toString() + ')();';
  *   Verilirse, o host'a ait eşleşmeler ana süreçten sendSync ile alınıp yalnız
  *   onlar çalıştırılır. Böylece her sayfaya tüm kural kümesi (~590 KB) gömülmüyor.
  */
-function preloadKaynagi(kurulumKodu) {
+function preloadKaynagi(kurulumKodu, prosedurelKodu) {
   const gövde = [
     "'use strict';",
     "const { webFrame, ipcRenderer } = require('electron');",
@@ -288,6 +288,19 @@ function preloadKaynagi(kurulumKodu) {
       '    if (__m && __m.length) {',
       '      webFrame.executeJavaScript(' + JSON.stringify(kurulumKodu) + ', false);',
       "      webFrame.executeJavaScript('window.__pusulaBetikCalistir&&window.__pusulaBetikCalistir(' + JSON.stringify(__m) + ')', false);",
+      '    }'
+    );
+  }
+  if (prosedurelKodu) {
+    // Yordamsal kozmetik (:has(...:contains()), :upward...): host'a ait
+    // seçicileri sendSync ile al; varsa değerlendiriciyi kurup çalıştır.
+    // Değerlendirici bir MutationObserver kurup dinamik reklamları da tarar.
+    gövde.push(
+      '    var __p = null;',
+      "    try { __p = ipcRenderer.sendSync('kozmetik:proc', location.hostname); } catch (e) { __p = null; }",
+      '    if (__p && __p.length) {',
+      '      webFrame.executeJavaScript(' + JSON.stringify(prosedurelKodu) + ', false);',
+      "      webFrame.executeJavaScript('window.__pusulaProsedurel&&window.__pusulaProsedurel(' + JSON.stringify(__p) + ')', false);",
       '    }'
     );
   }

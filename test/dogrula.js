@@ -604,12 +604,27 @@ esit('her kayıt geçerli alan adı biçiminde', LISTE.filter(d => !ALAN_BICIMI.
    * seçiciler CSS'e girer ve demetlerini düşürür.
    */
   const uzantililar = [
-    '##div:has-text(reklam)', '##div:matches-css(display: none)', '##div:matches-media(min-width)',
-    '##div:matches-path(/x)', '##div:matches-attr(a)', '##:xpath(//div)', '##div:upward(2)',
-    '##div:remove(', '##div:nth-ancestor(1)', '##div:watch-attr(class)',
-    '##div:min-text-length(5)', '##div:others(x)', '##div:style(color: red)', '##div:-abp-has(a)'
+    '##div:has-text(reklam)', '##div:contains(reklam)', '##div:matches-css(display: none)',
+    '##div:matches-media(min-width)', '##div:matches-path(/x)', '##div:matches-attr(a)',
+    '##:xpath(//div)', '##div:upward(2)', '##div:remove(', '##div:nth-ancestor(1)',
+    '##div:watch-attr(class)', '##div:min-text-length(5)', '##div:others(x)',
+    '##div:-abp-has(a)', '##div:if(a)', '##div:if-not(a)'
   ];
   for (const u of uzantililar) esit('uzantı söz dizimi elenir: ' + u, kuralCoz(u), null);
+
+  // :style() ARTIK DESTEKLENİYOR: gizleme yerine keyfi stil (AdGuard r10.net).
+  const stilK = kuralCoz('r10.net##.modal-backdrop:style(display: none!important;)');
+  esit(':style() kabul edilir - seçici', stilK && stilK.secici, '.modal-backdrop');
+  esit(':style() kabul edilir - stil', stilK && stilK.stil, 'display: none!important;');
+  esit(':style() güvensiz bildirim (süslü parantez) reddedilir',
+    kuralCoz('##.x:style(a} body{display:none)'), null);
+  {
+    const d = new KozmetikDepo();
+    d.ekle(kuralCoz('r10.net##.footerSponsors'));
+    d.ekle(stilK);
+    esit(':style() CSS bloğu üretir',
+      d.css('www.r10.net').includes('.modal-backdrop{display: none!important;}'), true);
+  }
 
   /*
    * Ayraçtan önceki kısım alan adı listesi olmalı; hosts dosyalarındaki

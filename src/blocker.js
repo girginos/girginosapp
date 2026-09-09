@@ -2,6 +2,7 @@
 
 const { LISTE } = require('./blocklist');
 const { cerezTasinsinMi } = require('./cerezler');
+const { UboMotor } = require('./ubo-motor');
 
 /*
  * İki seviyeli son ekler. Kayıtlanabilir alan adını doğru bulmak için gerekli:
@@ -100,15 +101,23 @@ class Blocker {
     this.listeler = null;        // indirilen filtre listeleri (ListeYoneticisi)
     this.sayaclar = new Map();   // webContentsId -> engellenen istek sayısı
     this.ustAlan = new Map();    // webContentsId -> sekmedeki üst seviye kök alan adı
+    this.ustUrl = new Map();     // webContentsId -> sekmedeki üst seviye TAM URL (SNFE originURL)
     this.birikenToplam = 0;
     this._yazZamanlayici = null;
+    this.ubo = new UboMotor();   // uBlock Origin ağ motoru (SNFE)
+    this._uboKuruluyor = false;
+    this._uboTekrar = false;
   }
+
+  // Kullanıcı SNFE'yi kapatabilir (bellek için); varsayılan açık.
+  get uboAcik() { return this.store.ayarlar.uboMotorAcik !== false; }
 
   get acik() { return this.store.ayarlar.engelleyiciAcik; }
 
   ustAlanAyarla(wcId, url) {
     const kok = kokAlanAdi(hostAl(url));
     this.ustAlan.set(wcId, kok);
+    this.ustUrl.set(wcId, url);
     this.sayaclar.set(wcId, 0);
   }
 
@@ -121,6 +130,7 @@ class Blocker {
   unut(wcId) {
     this.sayaclar.delete(wcId);
     this.ustAlan.delete(wcId);
+    this.ustUrl.delete(wcId);
   }
 
   // Alan adı ya da üst alan adlarından biri listede mi?
@@ -154,6 +164,20 @@ class Blocker {
     // Yerleşik liste her zaman kazanır: indirilen listelerdeki bir istisna
     // kuralı bizim elle seçtiğimiz izleyicileri serbest bırakamasın.
     if (this.listede(host)) return true;
+
+    /*
+     * uBlock Origin ağ motoru (SNFE): tam uBO söz dizimi - yol kalıpları,
+     * kaynak-türü ($script/$image...), $domain=, $third-party ve istisnalar.
+     * Dönen: 1=engelle, 2=istisna(izin), 0=eşleşme yok. Motor hazır değilse
+     * ya da kapalıysa eski çıplak-alan motoruna düşülür.
+     */
+    if (this.uboAcik && this.ubo.hazir) {
+      const originURL = (wcId != null && this.ustUrl.get(wcId)) || '';
+      const karar = this.ubo.eslesme(originURL, details.url, details.resourceType);
+      if (karar === 1) return true;
+      if (karar === 2) return false;
+    }
+
     return this.listeler ? this.listeler.engelleniyorMu(host) : false;
   }
 
@@ -210,6 +234,29 @@ class Blocker {
 
   listeleriBagla(yonetici) {
     this.listeler = yonetici;
+  }
+
+  /*
+   * SNFE'yi mevcut listelerin ham metinlerinden kurar/yeniden kurar. Liste ya
+   * da ayar değişince main.js çağırıyor. SNFE süreçte TEK ÖRNEK olduğundan
+   * eşzamanlı çağrılar birleştiriliyor (useLists sırası bozulmasın). Async;
+   * boot yolunu bloklamaz, hazır olana dek eski motor devrede.
+   */
+  async uboyuKur() {
+    if (!this.uboAcik || !this.listeler) return;
+    if (this._uboKuruluyor) { this._uboTekrar = true; return; }
+    this._uboKuruluyor = true;
+    try {
+      do {
+        this._uboTekrar = false;
+        const ham = this.listeler.hamListeler();
+        if (ham.length) await this.ubo.listelerdenKur(ham);
+      } while (this._uboTekrar);
+    } catch (e) {
+      console.error('uBO motoru kurulamadı, eski motora düşülüyor:', e.message);
+    } finally {
+      this._uboKuruluyor = false;
+    }
   }
 
   bagla(ses, degisimBildir) {

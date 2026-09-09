@@ -24,7 +24,7 @@ const PORT = 8804;
 const SAYFA = `<!doctype html><meta charset="utf-8"><title>deneme</title>
 <div id="icerik">içerik</div>
 <div class="reklam-kutusu">reklam</div>
-<div class="yan-reklam">yan</div>
+<div class="yan-kutu">yan</div>
 <div id="sadece-haber">habere özel</div>
 <div class="istisnali">istisna</div>`;
 
@@ -32,7 +32,7 @@ const LISTE_METNI = [
   '! Title: Deneme',
   '##.reklam-kutusu',
   '##.istisnali',
-  'haber.test##.yan-reklam',
+  'haber.test##.yan-kutu',
   'haber.test###sadece-haber',
   'haber.test#@#.istisnali',
   '||izleyici.test^',
@@ -102,7 +102,7 @@ app.whenReady().then(async () => {
 
   const gorunum = () => wc.executeJavaScript(`(() => {
     const d = (s) => { const e = document.querySelector(s); return e ? getComputedStyle(e).display : '(yok)'; };
-    return { icerik: d('#icerik'), reklam: d('.reklam-kutusu'), yan: d('.yan-reklam'),
+    return { icerik: d('#icerik'), reklam: d('.reklam-kutusu'), yan: d('.yan-kutu'),
              haber: d('#sadece-haber'), istisna: d('.istisnali') };
   })()`, false);
 
@@ -148,7 +148,7 @@ app.whenReady().then(async () => {
   bozuk.ekle({ tip: 'gizle', alanlar: [], eksiler: [], secici: '.reklam-kutusu' });
   // Aynı demete girmesin diye araya dolgu koyuyoruz.
   for (let i = 0; i < 25; i++) bozuk.ekle({ tip: 'gizle', alanlar: [], eksiler: [], secici: '.dolgu-' + i });
-  bozuk.ekle({ tip: 'gizle', alanlar: [], eksiler: [], secici: '.yan-reklam:bozuk-sozde-sinif(' });
+  bozuk.ekle({ tip: 'gizle', alanlar: [], eksiler: [], secici: '.yan-kutu:bozuk-sozde-sinif(' });
 
   wc.removeAllListeners('did-navigate');
   await wc.loadURL('http://127.0.0.1:' + PORT + '/?dorduncu');

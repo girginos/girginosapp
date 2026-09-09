@@ -94,7 +94,12 @@ function esit(ad, a, b) {
   console.log('\n4) Sunucu ele geçirilmiş gibi: manifest tek bayt değişirse');
   const bozuk = Buffer.from(ham);
   const i = bozuk.indexOf(yayindaki);
-  bozuk[i + 4] = '9'.charCodeAt(0);   // sürümü 0.1.9 yap
+  // Sürümün SON hanesini GARANTİLİ farklı bir haneye çeviriyoruz. Eski kod
+  // sabit i+4'ü '9' yapıyordu; sürüm '9' ile bitince (ör. 0.4.9) aynı bayta
+  // aynı değeri yazmak NO-OP oluyor, manifest hiç değişmiyor ve imza geçerli
+  // kalıp test kendini çürütüyordu. Artık sürüme bakılmaksızın bir bayt değişir.
+  const sonHane = i + yayindaki.length - 1;
+  bozuk[sonHane] = bozuk[sonHane] === '0'.charCodeAt(0) ? '1'.charCodeAt(0) : '0'.charCodeAt(0);
   const sahte = manifestDogrula({
     ham: bozuk, imza,
     acikAnahtarlar: anahtarlar.ACIK_ANAHTARLAR,

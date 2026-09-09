@@ -12,6 +12,9 @@ const DEFAULTS = {
     tema: 'sistem',
     aramaMotoru: 'duckduckgo',
     engelleyiciAcik: true,
+    // uBlock Origin ağ motoru (SNFE). Kapatılırsa ~120 MB bellek düşer, ağ
+    // engelleme eski çıplak-alan motoruna iner. Varsayılan açık.
+    uboMotorAcik: true,
     dntGonder: true,
     // Üçüncü taraf çerezleri siteler arası takibin ana taşıyıcısı; varsayılan
     // olarak taşınmıyorlar. Bozulan bir site çıkarsa adres çubuğundaki site
@@ -25,6 +28,13 @@ const DEFAULTS = {
     vekilKip: 'sistem',
     vekilAdres: '',
     vekilAtla: '',
+    // VPN: kendi proxy sunucularına şifreli tünel. vpnAcik açıkken elle vekili
+    // geçersiz kılar. Bant limiti (100 Mbps/kullanıcı) SUNUCUDA uygulanır (açık
+    // kaynak istemci limiti sökülebilir; bkz. src/vpn.js).
+    vpnAcik: false,
+    vpnLokasyon: 'de-1',
+    cihazToken: '',    // proxy kimlik doğrulama token'ı (sunucudan)
+    cihazKimlik: '',   // kalıcı anonim cihaz kimliği (ilk gerekince üretilir)
     gecmisiKaydet: true,
     anasayfa: '',
     yerImleriCubugu: true,

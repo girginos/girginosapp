@@ -5,8 +5,9 @@ const fsp = require('node:fs/promises');
 const path = require('node:path');
 const crypto = require('node:crypto');
 const { IKI_SEVIYELI } = require('./blocker');
-const { KozmetikDepo, kuralCoz } = require('./kozmetik');
+const { KozmetikDepo, kuralCoz, yerlesikKozmetik } = require('./kozmetik');
 const { BetikDepo, betikCoz, yerleşikDepo } = require('./betikler');
+const { prosedurelCoz, ProsedurelDepo, yerlesikProsedurel } = require('./prosedurel');
 
 /*
  * Filtre listesi yöneticisi.
@@ -36,7 +37,13 @@ const { BetikDepo, betikCoz, yerleşikDepo } = require('./betikler');
  */
 const VARSAYILAN_LISTELER = [
   { id: 'easylist', ad: 'EasyList', aciklama: 'Reklamlar', url: 'https://easylist.to/easylist/easylist.txt' },
-  { id: 'easyprivacy', ad: 'EasyPrivacy', aciklama: 'İzleyiciler', url: 'https://easylist.to/easylist/easyprivacy.txt' }
+  { id: 'easyprivacy', ad: 'EasyPrivacy', aciklama: 'İzleyiciler', url: 'https://easylist.to/easylist/easyprivacy.txt' },
+  // uBlock Origin çekirdek filtreleri: ağ + kozmetik + scriptlet. SNFE (ubo-motor)
+  // tam uBO söz dizimini uyguladığı için artık gerçekten etkili.
+  { id: 'ublock-filters', ad: 'uBlock filters', aciklama: 'uBO çekirdek', url: 'https://ublockorigin.github.io/uAssets/filters/filters.min.txt' },
+  // AdGuard Türkçe: r10.net gibi Türk sitelerinin birinci-taraf/gizlenmiş
+  // reklamları için kritik kozmetik + scriptlet kuralları.
+  { id: 'adguard-tr', ad: 'AdGuard Türkçe', aciklama: 'Türkçe siteler', url: 'https://filters.adtidy.org/extension/ublock/filters/13.txt' }
 ];
 
 const EN_BUYUK_BAYT = 16 * 1024 * 1024;
@@ -51,7 +58,7 @@ const EN_AZ_KURAL = 20;                     // bundan azı "liste bozuk" sayıl�
  * hic yok ve ham metin saklanmadigi icin sonradan uretilemiyor. Numara
  * artirilinca eski onbellekler yok sayilir ve liste yeniden indirilir.
  */
-const BICIM = 4;
+const BICIM = 6;   // 6: kozmetik :style() biçimi (3'lü dizi) + ham metin
 const CSS_ONBELLEK_SINIRI = 500;
 
 // Yalnızca tek bir ana makine adı: joker, yol, port yok.
@@ -111,6 +118,7 @@ function ayristir(metin, guvenilir = false) {
   const istisnalar = new Set();
   const kozmetik = new KozmetikDepo();
   const betik = new BetikDepo();
+  const prosedurel = new ProsedurelDepo();
   const meta = { baslik: '', surum: '', gecerlilikSaat: VARSAYILAN_GECERLILIK_SAAT };
   let toplamKural = 0;
   let atlanan = 0;
@@ -154,6 +162,9 @@ function ayristir(metin, guvenilir = false) {
       } else {
         const k = kuralCoz(satir);
         if (k) { kozmetik.ekle(k); toplamKural++; continue; }
+        // Saf CSS değilse yordamsal (:has(...:contains()), :style zinciri...) dene.
+        const p = prosedurelCoz(satir);
+        if (p) { prosedurel.ekle(p); toplamKural++; continue; }
       }
       // Tanınmadıysa yorum ya da hosts satırı olabilir; aşağıya düşsün.
     }
@@ -204,6 +215,7 @@ function ayristir(metin, guvenilir = false) {
     istisnalar: [...istisnalar],
     kozmetik: kozmetik.disaAktar(),
     betik: betik.disaAktar(),
+    prosedurel: prosedurel.disaAktar(),
     meta,
     toplamKural,
     atlanan
@@ -252,6 +264,7 @@ class ListeYoneticisi {
     this.istisnalar = new Set();
     this.kozmetik = new KozmetikDepo();
     this.betik = new BetikDepo();
+    this.prosedurel = new ProsedurelDepo();
     this._cssOnbellek = new Map();  // host -> hazırlanmış CSS
     this._zamanlayici = null;
     this._ilkZamanlayici = null;
@@ -285,6 +298,8 @@ class ListeYoneticisi {
           istisnalar: new Set(k.istisnalar || []),
           kozmetik: KozmetikDepo.iceAktar(k.kozmetik),
           betik: BetikDepo.iceAktar(k.betik),
+          prosedurel: ProsedurelDepo.iceAktar(k.prosedurel),
+          ham: k.ham || '',
           ustBilgi: k.ustBilgi || {}
         });
       } catch {
@@ -297,22 +312,25 @@ class ListeYoneticisi {
   _birlestir() {
     const a = new Set();
     const i = new Set();
-    const kz = new KozmetikDepo();
+    const kz = yerlesikKozmetik();
     // Yerleşik anti-adblock scriptlet'leri her zaman temel oluşturur; listeler
     // üstüne yığılır. Aynı kural iki kez gelirse eslesenler() tekrarı eliyor.
     const bt = yerleşikDepo();
+    const pr = yerlesikProsedurel();
     if (this.acik) {
       for (const k of this.kayitlar.values()) {
         for (const h of k.alanlar) a.add(h);
         for (const h of k.istisnalar) i.add(h);
         if (k.kozmetik) kz.birlestir(k.kozmetik);
         if (k.betik) bt.birlestir(k.betik);
+        if (k.prosedurel) pr.birlestir(k.prosedurel);
       }
     }
     this.alanlar = a;
     this.istisnalar = i;
     this.kozmetik = kz;
     this.betik = bt;
+    this.prosedurel = pr;
     this._cssOnbellek.clear();
     this.degisti();
   }
@@ -344,8 +362,31 @@ class ListeYoneticisi {
     return css;
   }
 
+  /**
+   * Bu host için yordamsal kozmetik seçiciler (sayfada çalışma zamanı tarar).
+   * Engelleyici kapalıysa boş.
+   */
+  prosedurelSeciciler(host) {
+    if (!this.acik || !host) return [];
+    return this.prosedurel ? this.prosedurel.seciciler(host) : [];
+  }
+
   // Listeler açılıp kapatıldığında birleşik kümeyi yeniden kurar.
   tazele() { this._birlestir(); }
+
+  /*
+   * SNFE (uBlock Origin ağ motoru) için ham filtre metinleri.
+   * Yalnızca listeler açıkken ve ham metni olan kayıtlar. Motor bunları
+   * useLists ile alıp tam uBO söz dizimini uyguluyor (bkz. src/ubo-motor.js).
+   */
+  hamListeler() {
+    if (!this.acik) return [];
+    const out = [];
+    for (const [id, k] of this.kayitlar) {
+      if (k && k.ham) out.push({ name: id, raw: k.ham });
+    }
+    return out;
+  }
 
   engelleniyorMu(host) {
     if (!this.acik) return false;
@@ -438,6 +479,8 @@ class ListeYoneticisi {
         istisnalar: new Set(c.istisnalar),
         kozmetik: KozmetikDepo.iceAktar(c.kozmetik),
         betik: BetikDepo.iceAktar(c.betik),
+        prosedurel: ProsedurelDepo.iceAktar(c.prosedurel),
+        ham: y.metin,
         ustBilgi: {
           baslik: c.meta.baslik,
           surum: c.meta.surum,
@@ -472,7 +515,9 @@ class ListeYoneticisi {
         alanlar: [...kayit.alanlar],
         istisnalar: [...kayit.istisnalar],
         kozmetik: (kayit.kozmetik || new KozmetikDepo()).disaAktar(),
-        betik: (kayit.betik || new BetikDepo()).disaAktar()
+        betik: (kayit.betik || new BetikDepo()).disaAktar(),
+        prosedurel: (kayit.prosedurel || new ProsedurelDepo()).disaAktar(),
+        ham: kayit.ham || ''
       }), 'utf8');
       await fsp.rename(gecici, this._dosya(id));
     } catch (e) {
@@ -523,4 +568,4 @@ class ListeYoneticisi {
   }
 }
 
-module.exports = { ListeYoneticisi, ayristir, kumedeMi, VARSAYILAN_LISTELER };
+module.exports = { ListeYoneticisi, ayristir, kumedeMi, VARSAYILAN_LISTELER, BICIM };

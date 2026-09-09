@@ -33,6 +33,7 @@ const DBG = 9422;
 
 const { BetikDepo, betikCoz } = require('../src/betikler');
 const { KozmetikDepo } = require('../src/kozmetik');
+const { BICIM } = require('../src/listeler');
 
 // İğne "AdBlockOn" script A'nın metninde; acs onu yakalayıp düşürmeli.
 const SAYFA = '<!doctype html><meta charset="utf-8"><title>AA</title>'
@@ -152,7 +153,7 @@ function kapat(cocuk) {
 
   fs.mkdirSync(path.join(profil, 'listeler'), { recursive: true });
   fs.writeFileSync(path.join(profil, 'listeler', 'easylist.json'), JSON.stringify({
-    bicim: 4,
+    bicim: BICIM,
     url: 'https://easylist.to/easylist/easylist.txt',
     ustBilgi: { baslik: 'test', indirilme: Date.now(), gecerlilikSaat: 100000 },
     alanlar: [], istisnalar: [],

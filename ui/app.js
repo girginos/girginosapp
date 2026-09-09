@@ -14,6 +14,7 @@ const el = {
   sayfaGoruntu: $('sayfaGoruntu'),
   gecmis: $('btnGecmis'), indirmeler: $('btnIndirmeler'),
   onbellek: $('btnOnbellek'), ayarlar: $('btnAyarlar'),
+  vpn: $('btnVpn'), istatistik: $('btnIstatistik'),
   yerImleriCubugu: $('yerImleriCubugu'),
   oneriler: $('oneriler'),
   bulCubugu: $('bulCubugu'), bulGirdi: $('bulGirdi'), bulSayac: $('bulSayac'),
@@ -58,6 +59,8 @@ function statikMetinler() {
   el.gecmis.title = cev('arac.gecmis');
   el.indirmeler.title = cev('arac.indirilenler');
   el.ayarlar.title = cev('arac.menu');
+  el.vpn.title = cev('arac.vpn');
+  el.istatistik.title = cev('arac.istatistik');
   el.adres.placeholder = cev('arac.adresIpucu');
   el.bulGirdi.placeholder = cev('bul.ipucu');
   el.bulOnceki.title = cev('bul.onceki');
@@ -767,6 +770,8 @@ el.reklamEngel.addEventListener('click', () => {
 });
 
 el.gecmis.addEventListener('click', () => panelAc('gecmis'));
+el.vpn.addEventListener('click', () => vpnMenusuAc());
+el.istatistik.addEventListener('click', () => panelAc('istatistik'));
 el.indirmeler.addEventListener('click', () => indirmeMenusuAc());
 // ≡ düğmesi ana menüyü açar. Menü yerel (native) çiziliyor: sayfa görünümü
 // arayüzün üstünde bir katman olduğu için HTML açılır menü altında kalırdı.
@@ -792,6 +797,14 @@ function indirmeMenusuAc() {
   const sagKenar = Math.max(0, document.documentElement.clientWidth - r.right);
   // Yerel menülerle aynı çapa: düğmenin alt kenarı.
   window.pusula.indirmeMenu({ sagKenar, y: r.bottom + 2 });
+}
+
+// VPN kutusu da (indirilenler gibi) sayfanın üstündeki katmanda açılıyor;
+// burada yalnızca düğmenin konumunu ölçüp ana sürece bildiriyoruz.
+function vpnMenusuAc() {
+  const r = el.vpn.getBoundingClientRect();
+  const sagKenar = Math.max(0, document.documentElement.clientWidth - r.right);
+  window.pusula.vpnMenu({ sagKenar, y: r.bottom + 2 });
 }
 
 // İzin kutusu bir tıklamayla açılmadığı için kilidin konumunu önceden
@@ -857,7 +870,8 @@ const PANEL_ANAHTARI = {
   yerImleri: 'panel.yerImleri',
   indirmeler: 'panel.indirilenler',
   ayarlar: 'panel.ayarlar',
-  siteIzinleri: 'panel.siteIzinleri'
+  siteIzinleri: 'panel.siteIzinleri',
+  istatistik: 'panel.istatistik'
 };
 
 function panelCiz() {
@@ -869,6 +883,7 @@ function panelCiz() {
   else if (acikPanel === 'indirmeler') indirmelerPaneli();
   else if (acikPanel === 'ayarlar') ayarlarPaneli();
   else if (acikPanel === 'siteIzinleri') siteIzinleriPaneli();
+  else if (acikPanel === 'istatistik') istatistikPaneli();
 }
 
 /*
@@ -1227,6 +1242,53 @@ function ayarlariSekmele(g) {
     });
     serit.appendChild(dugme);
   });
+}
+
+/*
+ * İstatistik paneli: engellenen izleyici (toplam + bu sekme), yüklü kural,
+ * yer imi sayısı ve VPN durumu.
+ */
+function istatistikPaneli() {
+  const g = document.createElement('div');
+  g.className = 'ayar-grup';
+  const say = (n) => Number(n || 0).toLocaleString(ceviri.yerel);
+  const kuralToplam = (durum.listeler || []).reduce((t, l) => t + l.kural, 0);
+  const t = (durum.sekmeler || []).find((s) => s.id === durum.aktifId);
+
+  const ist = document.createElement('div');
+  ist.className = 'istatistik';
+  for (const [sayi, etiket] of [
+    [say(durum.toplamEngellenen), cev('ayar.engellenenSayi')],
+    [say(t ? t.engellenen : 0), cev('ist.buSekme')],
+    [say(kuralToplam), cev('ayar.yukluAlan')],
+    [say((durum.yerImleri || []).length), cev('ayar.yerImiSayi')]
+  ]) {
+    const kutu = document.createElement('div');
+    kutu.className = 'kutu';
+    const s = document.createElement('div');
+    s.className = 'sayi';
+    s.textContent = sayi;
+    const e = document.createElement('div');
+    e.className = 'etiket';
+    e.textContent = etiket;
+    kutu.append(s, e);
+    ist.appendChild(kutu);
+  }
+  g.appendChild(ist);
+
+  const a = durum.ayarlar;
+  const lok = (durum.vpnKatalog || []).find((s) => s.id === a.vpnLokasyon);
+  const h = document.createElement('h2');
+  h.textContent = cev('panel.vpn');
+  g.appendChild(h);
+  const vd = document.createElement('div');
+  vd.className = 'vpn-durum ' + (a.vpnAcik ? 'acik' : 'kapali');
+  vd.textContent = a.vpnAcik
+    ? cev('vpn.durumBagli', { lokasyon: lok ? lok.ad : '', limit: lok ? lok.limitMbps : 100 })
+    : cev('vpn.durumKapali');
+  g.appendChild(vd);
+
+  el.panelIcerik.appendChild(g);
 }
 
 function ayarlarPaneli() {

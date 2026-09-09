@@ -1030,3 +1030,42 @@ svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width:
   color: var(--metin2);
   font-size: 13px;
 }
+
+/* VPN paneli durum kutusu + istatistik VPN satırı */
+.vpn-durum { padding: 10px 12px; border-radius: var(--yuvarlak); font-weight: 600; margin-bottom: 14px; }
+.vpn-durum.acik { background: var(--vurgu-yumusak); color: var(--vurgu); }
+.vpn-durum.kapali { background: var(--zemin2); color: var(--metin2); }
+.vpn-uyari { color: var(--tehlike); margin: -6px 0 10px; }
+.vpn-ip { margin-inline-start: 8px; font-variant-numeric: tabular-nums; }
+
+
+/* VPN açılır kutusu — VeePN tarzı (katman içinde) */
+.vpn-ekran { display: flex; flex-direction: column; align-items: center; gap: 11px; padding: 8px 10px 12px; }
+.vpn-guc { width: 104px; height: 104px; border-radius: 50%; border: none; cursor: pointer; display: grid; place-items: center; color: #fff; box-shadow: var(--golge); transition: transform var(--gecis); margin-top: 4px; }
+.vpn-guc svg { width: 40px; height: 40px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
+.vpn-guc.kapali { background: linear-gradient(145deg, #3f83ff, #2867ff); }
+.vpn-guc.acik { background: linear-gradient(145deg, #22c55e, #16a34a); }
+.vpn-guc:hover { transform: translateY(-1px); }
+.vpn-guc:active { transform: scale(.97); }
+.vpn-guc:disabled { opacity: .7; cursor: default; }
+.vpn-durum-metin { font-weight: 700; font-size: 15px; letter-spacing: .3px; margin-top: 2px; }
+.vpn-kart { width: 100%; box-sizing: border-box; background: var(--kart); border: 1px solid var(--cizgi); border-radius: 12px; padding: 12px 14px; display: flex; align-items: center; gap: 12px; }
+.vpn-lokasyon-kart { cursor: pointer; text-align: start; }
+.vpn-lokasyon-kart:hover { border-color: var(--cizgi-guclu); }
+.vpn-bayrak { font-size: 26px; line-height: 1; }
+.vpn-lok-ad { display: flex; flex-direction: column; flex: 1; }
+.vpn-lok-ad b { font-size: 15px; }
+.vpn-lok-ad small { color: var(--metin2); }
+.vpn-ok { color: var(--metin2); font-size: 22px; }
+.vpn-ip-kart { justify-content: space-between; }
+.vpn-ip-deger { font-variant-numeric: tabular-nums; }
+.vpn-token-kart { flex-direction: column; align-items: stretch; gap: 7px; }
+.vpn-token-kart.gerekli { border-color: var(--vurgu); box-shadow: 0 0 0 2px var(--vurgu-yumusak); }
+.vpn-token-baslik { font-weight: 600; font-size: 13px; color: var(--metin2); }
+.vpn-token-girdi { width: 100%; box-sizing: border-box; height: 32px; padding: 0 10px; border: 1px solid var(--cizgi); border-radius: 8px; background: var(--zemin); color: var(--metin); font: inherit; font-size: 13px; }
+.vpn-token-girdi:focus-visible { outline: none; border-color: var(--vurgu); }
+.vpn-uyari:empty { display: none; }
+.vpn-uyari { color: var(--tehlike); font-size: 12px; }
+.vpn-ip-kart .dugme { flex: 0 0 auto; }
+.vpn-gizli-sec { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+.vpn-limit { color: var(--metin2); font-size: 12px; text-align: center; }

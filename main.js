@@ -2,7 +2,7 @@
 
 const {
   app, BrowserWindow, WebContentsView, ipcMain, shell, session,
-  dialog, Menu, clipboard, nativeTheme, protocol
+  dialog, Menu, clipboard, nativeTheme, protocol, webFrameMain
 } = require('electron');
 const path = require('node:path');
 
@@ -17,10 +17,13 @@ try {
 } catch (e) { /* çökme raporlama kritik değil */ }
 const fs = require('node:fs');
 const { pathToFileURL } = require('node:url');
+const { execFile } = require('node:child_process');
 
 const { Store } = require('./src/store');
 const { preloadKaynagi } = require('./src/anti-adblock');
+const { kararlilikPreloadKaynagi } = require('./src/kararlilik');
 const { anaDunyaKurulumKodu: betikKurulumKodu, yerleşikDepo: betikYerlesikDepo } = require('./src/betikler');
+const { DEGERLENDIRICI_KODU: prosedurelKodu } = require('./src/prosedurel');
 const { Blocker, kokAlanAdi, hostAl } = require('./src/blocker');
 const { ListeYoneticisi } = require('./src/listeler');
 const { dilCoz, ceviri, bicimle, dilListesi } = require('./src/diller');
@@ -37,6 +40,7 @@ const {
 const { SertifikaDeposu } = require('./src/sertifikalar');
 const { silinecekCerezler, cerezSilmeUrl } = require('./src/cerezler');
 const { vekilKurallari, adresGecerliMi, atlamaGecerliMi } = require('./src/vekil');
+const { vpnVekilKurali, lokasyonGecerliMi: vpnLokasyonGecerliMi, katalog: vpnKatalog } = require('./src/vpn');
 const { ipucuBasliklari } = require('./src/istemci-ipuclari');
 
 /*
@@ -279,6 +283,7 @@ function durumGonder(statikDe = false) {
     veri.diller = dilListesi();
     veri.motorlar = SEARCH_ENGINES;
     veri.izinTurleri = IZIN_TURLERI;
+    veri.vpnKatalog = vpnKatalog();
   }
   win.webContents.send('durum', veri);
 }
@@ -604,6 +609,24 @@ function olaylariBagla(t) {
     // YALNIZCA yeni gezilen çerçeveyi giydir - tüm çerçeveleri değil (N*N patlaması).
     const css = kozmetikCssAl(t.url);
     if (css && e && e.frame) cerceveGiydir(e.frame, css);
+  });
+
+  /*
+   * Electron 44'te did-frame-navigate, alt çerçevelerin İLK yüklenmesinde
+   * güvenilir tetiklenmiyor (ölçüldü: aynı-köken iframe'de hiç ya da çok geç);
+   * iframe içindeki reklamlar gizlenmeden kalıyordu. did-frame-finish-load HER
+   * çerçeve yüklenince tetikleniyor; çerçeveyi webFrameMain.fromId ile çözüp
+   * kozmetiği uyguluyoruz. Yalnız o çerçeve giydiriliyor -> O(N), N*N değil.
+   * (Liste açılıştan geç gelirse kozmetigiTazele alt çerçeveleri yeniden giydirir.)
+   */
+  wc.on('did-frame-finish-load', (_e, anaCerceve, pid, rid) => {
+    if (anaCerceve) return;
+    const css = kozmetikCssAl(t.url);
+    if (!css) return;
+    try {
+      const cerceve = webFrameMain.fromId(pid, rid);
+      if (cerceve) cerceveGiydir(cerceve, css);
+    } catch (e2) { /* çerçeve gitmiş olabilir */ }
   });
 
   wc.on('did-navigate-in-page', (_e, url, anaCerceve) => {
@@ -1442,15 +1465,15 @@ function webrtcPolitikasi() {
 const ANTI_ADBLOCK_ID = 'anti-adblock';
 
 /*
- * SAYFA-ENJEKSİYON ADBLOCK GEÇİCİ OLARAK KAPALI.
+ * SAYFA-ENJEKSİYON ADBLOCK ETKİN.
  *
- * Kozmetik CSS + scriptlet + anti-adblock preload, chromewebstore gibi
- * sayfalarda Chromium'u native çökertiyordu (bkz. antiAdblockKur). Kararlılık
- * için sayfaya enjeksiyon yapan tüm adblock katmanı kapatıldı; ağ (alan adı)
- * engellemesi güvenli olduğu için açık kalıyor. Yerine açık kaynak bir
- * engelleyici motoru entegre edilecek; o zaman bu bayrak kaldırılacak.
+ * Kozmetik CSS + scriptlet + anti-adblock preload yeniden açık. Bunu kapatma
+ * gerekçesi (0.4.5-0.4.8) YANLIŞ çıktı: chromewebstore çökmesi bu katman değil,
+ * Electron'da uygulanmayan chrome.webstorePrivate idi (minidump ile kanıtlandı,
+ * 0.4.9'da src/kararlilik.js ile düzeltildi). Ağ tarafı artık uBlock Origin
+ * motoruyla (SNFE, src/ubo-motor.js) tam uBO söz dizimini uyguluyor.
  */
-const ADBLOCK_SAYFA_ENJEKSIYON = false;
+const ADBLOCK_SAYFA_ENJEKSIYON = true;
 
 /*
  * Bir host için çalışacak scriptlet eşleşmeleri. Sekme preload'ı her gezinmede
@@ -1475,6 +1498,58 @@ function betikEslesenler(host) {
 }
 
 /*
+ * Bir host için YORDAMSAL kozmetik seçiciler ('kozmetik:proc' sendSync'i
+ * bunu çağırıyor). Sayfa değerlendiricisi bunları MutationObserver ile canlı
+ * uyguluyor - dinamik/rastgele-sınıflı reklamları da yakalar.
+ */
+function prosedurelEslesenler(host) {
+  try {
+    if (!ADBLOCK_SAYFA_ENJEKSIYON) return [];
+    if (!host || !store.ayarlar.engelleyiciAcik) return [];
+    const kok = kokAlanAdi(host);
+    if (kok && store.siteIzinliMi(kok)) return [];
+    return listeler ? listeler.prosedurelSeciciler(host) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+// Çıkış IP'sini gezinti oturumundan alır (VPN açıksa sunucu IP'si).
+async function vpnCikisIpAl() {
+  try {
+    const y = await ses.fetch('https://api.ipify.org', { cache: 'no-store' });
+    if (!y.ok) return '';
+    return (await y.text()).trim().slice(0, 64);
+  } catch (e) { return ''; }
+}
+
+// VPN açılır kutusu (katman) içeriği: durum + çevrilmiş etiketler + katalog.
+function vpnKatmanIcerik(konum) {
+  const a = store.ayarlar;
+  const kat = vpnKatalog();
+  const lok = kat.find((s) => s.id === a.vpnLokasyon) || kat[0] || { id: '', ad: '', ulke: '', limitMbps: 100 };
+  return {
+    tur: 'vpn', yon: 'sag',
+    ust: Math.max(0, Math.round((konum && konum.y) || chromeYukseklik)),
+    kenar: Math.max(6, Math.round((konum && konum.sagKenar) || 8)),
+    genislik: 320,
+    acik: !!a.vpnAcik,
+    tokenVar: !!(a.cihazToken && String(a.cihazToken).trim()),
+    token: a.cihazToken || '',   // kullanıcının kendi kimliği; alanına geri yazılır (parola tipi)
+    lokasyon: lok,
+    katalog: kat,
+    metin: {
+      baslik: cev('arac.vpn'),
+      baglantiAcik: cev('vpn.baglantiAcik'), baglantiKapali: cev('vpn.baglantiKapali'),
+      ac: cev('vpn.ac'), lokasyon: cev('vpn.lokasyon'), token: cev('vpn.token'),
+      tokenYer: cev('vpn.tokenYer'), tokenGerek: cev('vpn.tokenGerek'),
+      ipBaslik: cev('vpn.ipBaslik'), ipGoster: cev('vpn.ipGoster'), ipHata: cev('vpn.ipHata'),
+      limit: cev('vpn.limitAciklama', { limit: lok.limitMbps }), kapat: cev('bul.kapat')
+    }
+  };
+}
+
+/*
  * Anti-adblock karşı-önlemini + scriptlet kurulumunu oturuma bağlar.
  *
  * Preload STATİK: yalnızca kütüphaneyi + window.__pusulaBetikCalistir'ı kurar ve
@@ -1486,25 +1561,56 @@ function betikEslesenler(host) {
  * loglanıyor ve uygulama yine de açılıyor - karşı-önlem kritik değil.
  */
 /*
- * GEÇİCİ OLARAK DEVRE DIŞI.
- *
- * Anti-adblock preload'ı (ANA_DUNYA_KODU: getComputedStyle Proxy'si + prototip
- * getter override'ları) ölçülerek chromewebstore gibi sayfalarda Chromium'u
- * NATIVE çökertiyordu (0xC0000005). Kanıt: Windows Olay Günlüğü'nde çökmeler
- * yalnız 0.4.5/0.4.6/0.4.7'de; paketlenmiş yapıda preload KAPATILINCA çökme
- * duruyor (2/2). Kararlılık için preload artık kaydedilmiyor ve varsa eski dosya
- * + kaydı temizleniyor. Yerine ileride açık kaynak, savaşta denenmiş bir
- * engelleyici (ör. Ghostery/Cliqz adblocker motoru) entegre edilecek.
+ * ANA_DUNYA_KODU (getComputedStyle Proxy'si + prototip getter override'ları) +
+ * scriptlet kurulumu preload'ı ETKİN. Kapatma gerekçesi yanlıştı: chromewebstore
+ * çökmesi bu preload değil, Electron'da olmayan chrome.webstorePrivate idi
+ * (0.4.9'da src/kararlilik.js düzeltti). Preload sayfa script'lerinden önce ana
+ * dünyaya girip yem-öge ölçümünü kandırır ve o host'un scriptlet'lerini sendSync
+ * ile alıp çalıştırır. Kayıt idempotent (kayitli bekçisi).
  */
 function antiAdblockKur() {
   try {
-    if (typeof ses.unregisterPreloadScript === 'function') {
+    const yol = path.join(app.getPath('userData'), 'anti-adblock-preload.js');
+    fs.writeFileSync(yol, preloadKaynagi(betikKurulumKodu(), prosedurelKodu), 'utf8');
+
+    if (typeof ses.registerPreloadScript === 'function') {
       const kayitli = (ses.getPreloadScripts ? ses.getPreloadScripts() : [])
         .some((p) => p.id === ANTI_ADBLOCK_ID);
-      if (kayitli) ses.unregisterPreloadScript(ANTI_ADBLOCK_ID);
+      if (!kayitli) ses.registerPreloadScript({ type: 'frame', id: ANTI_ADBLOCK_ID, filePath: yol });
+    } else {
+      const mevcut = ses.getPreloads ? ses.getPreloads() : [];
+      if (!mevcut.includes(yol)) ses.setPreloads([...mevcut, yol]);
     }
-    fs.rmSync(path.join(app.getPath('userData'), 'anti-adblock-preload.js'), { force: true });
-  } catch (e) { /* geç */ }
+  } catch (e) {
+    console.error('Anti-adblock karşı-önlemi kurulamadı:', e.message);
+  }
+}
+
+const KARARLILIK_ID = 'kararlilik-webstore';
+
+/*
+ * KARARLILIK YAMASI kurulumu (bkz. src/kararlilik.js).
+ *
+ * chrome.webstorePrivate.getReferrerChain() çağrısı Electron'da uygulanmadığı
+ * için chromewebstore.google.com açılınca tarayıcı süreci NATIVE çöküyordu
+ * (0xC0000005, minidump ile doğrulandı). Bu preload sayfa script'lerinden önce
+ * o API'yi zararsız noop'larla körlüyor. Adblock katmanından BAĞIMSIZ: küçük,
+ * statik, yalnızca electron'a dayanıyor ve ana dünyayı yalnız bu tek konuda
+ * yamalıyor. Bir kez yazılıp kaydediliyor; ayar/liste değişince yeniden
+ * üretilmesi gerekmez.
+ */
+function kararlilikKur() {
+  try {
+    const yol = path.join(app.getPath('userData'), 'kararlilik-preload.js');
+    fs.writeFileSync(yol, kararlilikPreloadKaynagi(), 'utf8');
+    const kayitli = (ses.getPreloadScripts ? ses.getPreloadScripts() : [])
+      .some((p) => p.id === KARARLILIK_ID);
+    if (!kayitli) {
+      ses.registerPreloadScript({ type: 'frame', id: KARARLILIK_ID, filePath: yol });
+    }
+  } catch (e) {
+    console.error('Kararlilik yamasi kurulamadi:', e.message);
+  }
 }
 
 /*
@@ -1532,8 +1638,25 @@ async function vekilKararaGore(o, ayar) {
   return false;
 }
 
+/*
+ * VPN kimlik doğrulaması için kalıcı, ANONİM cihaz kimliği (kişisel veri değil;
+ * token'la eşleşen rastgele id). İlk gerekince üretilip ayarlara yazılıyor.
+ */
+function cihazKimligi() {
+  if (!store.ayarlar.cihazKimlik) store.ayarla('cihazKimlik', 'c-' + require('node:crypto').randomUUID());
+  return store.ayarlar.cihazKimlik;
+}
+
 async function vekiliUygula() {
-  const kural = vekilKurallari(store.ayarlar);
+  /*
+   * VPN AÇIKSA proxy'yi VPN sunucusu belirler; elle vekil ayarını geçersiz kılar.
+   * VPN açık ama sunucu kuralı üretilemezse (katalog/adres bozuk) FAIL-CLOSED:
+   * erişilemez proxy -> trafik doğrudan SIZMAZ, hata görünür.
+   */
+  const kural = store.ayarlar.vpnAcik
+    ? (vpnVekilKurali(store.ayarlar.vpnLokasyon)
+       || { mode: 'fixed_servers', proxyRules: 'http://0.0.0.0:1', proxyBypassRules: '', gecerli: false })
+    : vekilKurallari(store.ayarlar);
   const ayar = { mode: kural.mode };
   if (kural.proxyRules) {
     ayar.proxyRules = kural.proxyRules;
@@ -1569,6 +1692,7 @@ async function oturumKur() {
   ses = session.fromPartition(OTURUM);
 
   antiAdblockKur();
+  kararlilikKur();
 
   /*
    * Sertifikayı yalnızca İZLİYORUZ: -3 "Chromium'un kendi doğrulama sonucunu
@@ -1601,7 +1725,7 @@ async function oturumKur() {
         sonDegisiklik: y.headers.get('last-modified') || ''
       };
     },
-    degisti: () => { durumGonder(); kozmetigiTazele(); antiAdblockKur(); }
+    degisti: () => { durumGonder(); kozmetigiTazele(); antiAdblockKur(); blocker.uboyuKur(); }
   });
   blocker.listeleriBagla(listeler);
 
@@ -1903,6 +2027,7 @@ const AYAR_DOGRULAMA = {
   aramaMotoru: (v) => typeof v === 'string' && Object.hasOwn(SEARCH_ENGINES, v),
   anasayfa: (v) => typeof v === 'string' && v.length <= 2048,
   engelleyiciAcik: (v) => typeof v === 'boolean',
+  uboMotorAcik: (v) => typeof v === 'boolean',
   dntGonder: (v) => typeof v === 'boolean',
   ucuncuTarafCerez: (v) => typeof v === 'boolean',
   kapanistaCerezSil: (v) => typeof v === 'boolean',
@@ -1912,6 +2037,9 @@ const AYAR_DOGRULAMA = {
   vekilAdres: (v) => typeof v === 'string' && v.length <= 300 && (v === '' || adresGecerliMi(v)),
   // Tek bir "*" butun vekili sessizce kapatiyordu; girdiler dogrulaniyor.
   vekilAtla: (v) => typeof v === 'string' && v.length <= 1000 && atlamaGecerliMi(v),
+  vpnAcik: (v) => typeof v === 'boolean',
+  vpnLokasyon: (v) => vpnLokasyonGecerliMi(v),
+  cihazToken: (v) => typeof v === 'string' && v.length <= 256,
   gecmisiKaydet: (v) => typeof v === 'boolean',
   yerImleriCubugu: (v) => typeof v === 'boolean',
   filtreListeleriAcik: (v) => typeof v === 'boolean',
@@ -1957,6 +2085,11 @@ function ipcKur() {
    */
   ipcMain.on('betik:coz', (e, host) => {
     try { e.returnValue = betikEslesenler(String(host || '')); }
+    catch (_) { e.returnValue = []; }
+  });
+
+  ipcMain.on('kozmetik:proc', (e, host) => {
+    try { e.returnValue = prosedurelEslesenler(String(host || '')); }
     catch (_) { e.returnValue = []; }
   });
 
@@ -2083,29 +2216,66 @@ function ipcKur() {
   });
 
   /*
-   * ONBELLEGI SIFIRLA.
+   * ONBELLEGI SIFIRLA - KAPSAMLI.
    *
-   * Kullanicilarin en sik takildigi sey eski surumu gormek. Yalnizca
-   * "onbelleksiz yenile" yetmiyor: alt kaynaklar (script, stil) ayni
-   * onbellekten gelmeye devam edebiliyor. Bu yuzden once HTTP onbellegi
-   * bosaltiliyor, sonra sayfa onbellek yok sayilarak yeniden yukleniyor.
+   * Yalnizca HTTP onbellegi degil, tarayicinin tuttugu TUM uctan-uca onbellekler
+   * temizleniyor. Kullanici "sadece browser cache siliniyor, DNS de silinsin"
+   * dedi; Chromium'un kendi onbellekleri session API'siyle boşaltiliyor:
+   *   - clearCache()             HTTP (sayfa/kaynak) onbellegi
+   *   - clearHostResolverCache() DNS / host cozumleyici onbellegi
+   *   - clearAuthCache()         HTTP kimlik dogrulama onbellegi (Basic/NTLM/...)
+   *   - clearCodeCaches({urls:[]}) derlenmis JS/WASM kod onbellegi (bos = hepsi)
+   *   - closeAllConnections()    canli HTTP/2 & QUIC baglantilari (kapatilmazsa
+   *                              acik soketler eski cozumu/oturumu kullanmaya devam eder)
    *
-   * GEZINTI VERISI SILINMIYOR: cerez, gecmis, oturum yerinde kaliyor.
-   * Kullanici "onbellegi sifirla" derken oturumunun kapanmasini beklemiyor.
+   * NOT (isletim sistemi DNS'i AYRI): bunlar Chromium'un IC onbellekleridir.
+   * Windows'un kendi DNS onbellegi (ipconfig /flushdns) tarayici disi, sistem
+   * geneli bir sey; tarayici davranisi icin gereken IC onbellek bu.
+   *
+   * Her cagri kendi try/catch'inde: biri (surum farki vs.) yoksa/hata verirse
+   * otekiler yine calisir. GEZINTI VERISI (cerez/gecmis/oturum) SILINMIYOR.
    */
+  /*
+   * İŞLETİM SİSTEMİ DNS ÖNBELLEĞİ (tarayıcı dışı).
+   *
+   * clearHostResolverCache Chromium'un IÇ DNS'ini temizliyor; işletim sisteminin
+   * kendi çözümleyici önbelleği ayrı. Windows'ta 'ipconfig /flushdns' bunu
+   * temizler ve YÖNETİCİ GEREKTİRMEZ (ölçüldü: admin=false ile başarılı).
+   * Sabit komut + sabit argüman (shell YOK, kullanıcı girdisi YOK) -> enjeksiyon
+   * riski yok. windowsHide: konsol penceresi çakmasın. macOS/Linux'ta sudo
+   * gerektiği için ŞİMDİLİK atlanıyor (cross-platform adımında ele alınacak).
+   */
+  function isletimSistemiDnsTemizle() {
+    return new Promise((coz, red) => {
+      if (process.platform !== 'win32') { coz(); return; }
+      try {
+        execFile('ipconfig', ['/flushdns'], { timeout: 8000, windowsHide: true }, (hata) => {
+          if (hata) red(hata); else coz();
+        });
+      } catch (e) { red(e); }
+    });
+  }
+
   handle('onbellek:temizle', async () => {
-    try {
-      // Liste indirmeleri ve guncelleme de kendi onbelleklerini tutuyor;
-      // yalnizca gezinti oturumunu temizlemek "eski surum" sikayetini
-      // yarim cozerdi.
-      for (const o of vekilOturumlari()) await o.clearCache();
-      const t = aktifSekme();
-      if (t && !t.view.webContents.isDestroyed()) t.view.webContents.reloadIgnoringCache();
-      return true;
-    } catch (e) {
-      console.error('Onbellek temizlenemedi:', e.message);
-      return false;
+    let tumu = true;
+    const guvenli = async (ad, fn) => {
+      try { if (typeof fn === 'function') await fn(); }
+      catch (e) { tumu = false; console.error('onbellek/' + ad + ' temizlenemedi:', e.message); }
+    };
+    // Gezinti + liste-indirme + guncelleme oturumlari; ayrica varsayilan oturum.
+    const oturumlar = [...vekilOturumlari(), session.defaultSession];
+    for (const o of oturumlar) {
+      await guvenli('http', () => o.clearCache());
+      await guvenli('dns', () => o.clearHostResolverCache && o.clearHostResolverCache());
+      await guvenli('kimlik', () => o.clearAuthCache && o.clearAuthCache());
+      await guvenli('kod', () => o.clearCodeCaches && o.clearCodeCaches({ urls: [] }));
+      await guvenli('baglanti', () => o.closeAllConnections && o.closeAllConnections());
     }
+    // İşletim sistemi DNS önbelleği (Windows: ipconfig /flushdns).
+    await guvenli('os-dns', () => isletimSistemiDnsTemizle());
+    const t = aktifSekme();
+    if (t && !t.view.webContents.isDestroyed()) t.view.webContents.reloadIgnoringCache();
+    return tumu;
   });
 
   handle('izin:varsayilan', (_e, p) => {
@@ -2137,6 +2307,17 @@ function ipcKur() {
     durumGonder();
     return true;
   });
+
+  handle('vpn:durum', () => ({
+    acik: !!store.ayarlar.vpnAcik,
+    lokasyon: store.ayarlar.vpnLokasyon,
+    katalog: vpnKatalog(),
+    tokenVar: !!store.ayarlar.cihazToken,
+    reddedildi: vekilReddedildi
+  }));
+
+  // Çıkış IP'sini gösterir (gezinti oturumundan, yani VPN açıksa sunucu IP'si).
+  handle('vpn:cikisIp', () => vpnCikisIpAl());
 
   handle('yerimi:degistir', () => {
     const s = aktifSekme();
@@ -2200,6 +2381,32 @@ function ipcKur() {
     katmanIzinKarari = null;
     katmanGizle();
     if (coz) coz({ izinVer: !!(karar && karar.izinVer), hatirla: !!(karar && karar.hatirla) });
+  });
+
+  // VPN açılır kutusu eylemleri (katmandan gelir).
+  katmanOn('katman:vpn-ackapa', (_e, deger) => {
+    store.ayarla('vpnAcik', !!deger);
+    vekiliUygula();
+    durumGonder();
+    const s = aktifSekme();
+    if (s && !s.view.webContents.isDestroyed()) s.view.webContents.reload();
+  });
+  katmanOn('katman:vpn-lokasyon', (_e, id) => {
+    if (!vpnLokasyonGecerliMi(id)) return;
+    store.ayarla('vpnLokasyon', id);
+    if (store.ayarlar.vpnAcik) { vekiliUygula(); const s = aktifSekme(); if (s && !s.view.webContents.isDestroyed()) s.view.webContents.reload(); }
+    durumGonder();
+  });
+  katmanOn('katman:vpn-token', (_e, t) => {
+    store.ayarla('cihazToken', String(t == null ? '' : t).trim().slice(0, 256));
+    durumGonder();
+  });
+  ipcMain.handle('katman:vpn-ip', (e) => (katmandan(e) ? vpnCikisIpAl() : null));
+
+  // VPN kutusu: arayüz düğmenin konumunu ölçüp gönderiyor, içerik burada üretiliyor.
+  on('vpn:menu', (_e, konum) => {
+    if (katmanAcikMi()) return katmanGizle();   // ikinci tıklama kapatır
+    katmanGoster(vpnKatmanIcerik(konum));
   });
 
   // İndirilenler kutusu: arayüz düğmenin konumunu ölçüp gönderiyor.
@@ -2277,8 +2484,14 @@ function ipcKur() {
     if (p.anahtar === 'filtreListeleriAcik' && listeler) listeler.tazele();
     // Scriptlet demeti engelleyici durumuna ve listeye bağlı; ikisi de tazelenmeli.
     if (p.anahtar === 'filtreListeleriAcik' || p.anahtar === 'engelleyiciAcik') antiAdblockKur();
+    if (p.anahtar === 'uboMotorAcik') blocker.uboyuKur();
     if (p.anahtar === 'tema') temayiUygula();
     if (p.anahtar.startsWith('vekil')) vekiliUygula();
+    if (p.anahtar === 'vpnAcik' || p.anahtar === 'vpnLokasyon') {
+      vekiliUygula();
+      const sv = aktifSekme();
+      if (sv && !sv.view.webContents.isDestroyed()) sv.view.webContents.reload();
+    }
     /*
      * Genel engelleyici toggle'ı sağ üstteki düğmeden geliyor. Aktif sekmeyi
      * yeniliyoruz: kozmetikCssAl ve engellensinMi engelleyiciAcik'i yalnızca
@@ -2389,6 +2602,20 @@ if (!app.requestSingleInstanceLock()) {
   // Komut satirinda verilen ilk http(s) adresi. Isletim sisteminden bir
   // baglanti acildiginda Electron adresi argv'ye koyuyor.
   const argvAdresi = (argv) => (argv || []).find((a) => /^https?:\/\//i.test(a));
+
+  /*
+   * VEKİL/VPN KİMLİK DOĞRULAMA. Proxy 407 dönerse Chromium 'login' olayını
+   * tetikliyor. VPN açıkken cihaz token'ını (kullanıcı adı = anonim cihaz kimliği,
+   * parola = token) veriyoruz; sunucu bununla yetkilendiriyor VE token başına
+   * 100 Mbps'e kısıyor. Yalnız isProxy + VPN açık: sitelerin kendi HTTP-auth
+   * istekleri buradan ETKİLENMEZ.
+   */
+  app.on('login', (event, _wc, _details, authInfo, callback) => {
+    if (store && authInfo && authInfo.isProxy && store.ayarlar.vpnAcik) {
+      event.preventDefault();
+      callback(cihazKimligi(), store.ayarlar.cihazToken || '');
+    }
+  });
 
   app.on('second-instance', (_e, argv) => {
     if (!win || win.isDestroyed()) return;

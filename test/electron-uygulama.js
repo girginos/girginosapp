@@ -23,6 +23,7 @@ const os = require('node:os');
 const path = require('node:path');
 const fs = require('node:fs');
 const { spawn } = require('node:child_process');
+const { BICIM } = require('../src/listeler');
 
 const KOK = path.join(__dirname, '..');
 const SUNUCU_PORT = 8811;
@@ -229,7 +230,7 @@ function listeOnbellegiYaz(dizin) {
 
   fs.mkdirSync(dizin, { recursive: true });
   fs.writeFileSync(path.join(dizin, 'easylist.json'), JSON.stringify({
-    bicim: 4,
+    bicim: BICIM,
     url: 'https://easylist.to/easylist/easylist.txt',
     ustBilgi: {
       baslik: 'Deneme', surum: '1', gecerlilikSaat: 999,
