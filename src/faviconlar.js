@@ -3,7 +3,9 @@
 const fs = require('node:fs');
 const fsp = require('node:fs/promises');
 const path = require('node:path');
+const dnsp = require('node:dns').promises;
 const { kokAlanAdi, hostAl } = require('./blocker');
+const { adresOzelMi, yerelAdMi } = require('./adresler');
 
 /*
  * Favicon önbelleği.
@@ -77,6 +79,35 @@ function faviconBirinciTarafMi(sayfaHost, faviconUrl) {
   const sayfaKok = kokAlanAdi(String(sayfaHost || '').toLowerCase().replace(/\.+$/, ''));
   const simgeKok = kokAlanAdi(hostAl(faviconUrl));
   return !!sayfaKok && sayfaKok === simgeKok;
+}
+
+/*
+ * ÖZEL/YEREL HEDEF DENETİMİ (iç ağ koruması).
+ *
+ * Simge adresini SAYFA seçiyor (<link rel="icon" href="...">) ama isteği ANA
+ * SÜREÇ atıyor. Yani sayfanın kendi CORS / Private Network Access / CSP
+ * kısıtları bu isteğe UYGULANMIYOR: denetim olmadan herhangi bir genel web
+ * sayfası tarayıcıyı iç ağı yoklamak için kullanabiliyor. ÖLÇÜLDÜ (PoC):
+ * evil.com sayfası <link rel=icon href="http://127.0.0.1:PORT/x.png"> ile ana
+ * sürece o isteği attırdı ve iç yanıt "pusula-favicon://evil.com" altında
+ * önbelleğe düştü - yani sayfa iç ağdan gelen bir görüntüyü geri okuyabilirdi.
+ *
+ * Kural: özel/yerel hedefe YALNIZCA sayfa da aynı yerdeyse gidilir. Böylece
+ * intranet gezerken sitenin kendi simgesi çalışmaya devam eder, üçüncü taraf
+ * adres engellenir. Ad bir özel adrese ÇÖZÜLÜYORSA da engellenir (DNS ile iç
+ * ağa yönlendirme); çözülemezse istek zaten başarısız olacağı için serbest.
+ */
+async function ozelHedefMi(host) {
+  const h = String(host || '').toLowerCase().replace(/^\[|\]$/g, '').replace(/\.+$/, '');
+  if (!h) return false;
+  if (yerelAdMi(h)) return true;
+  if (h.includes(':') || /^[0-9.]+$/.test(h)) return adresOzelMi(h);
+  try {
+    const kayitlar = await dnsp.lookup(h, { all: true });
+    return kayitlar.some((k) => adresOzelMi(k.address));
+  } catch {
+    return false;
+  }
 }
 
 /*
@@ -209,6 +240,18 @@ class FaviconDeposu {
     const birinciTaraf = !!secenek.ziyaretEdildi
       && faviconBirinciTarafMi(host, faviconUrl);
 
+    /*
+     * İÇ AĞ KORUMASI (bkz. ozelHedefMi). Sayfanın verdiği adres özel/yerel bir
+     * hedefe gidiyorsa yalnızca sayfa da orada barınıyorsa izin veriyoruz;
+     * aksi hâlde genel bir sayfa bu yolla iç ağı yoklayabilirdi. data: adresi
+     * ağa çıkmadığı için denetim dışı.
+     */
+    if (!/^data:/i.test(faviconUrl)
+        && await ozelHedefMi(hostAl(faviconUrl))
+        && !faviconBirinciTarafMi(host, faviconUrl)) {
+      return;
+    }
+
     this.deneniyor.add(alan);
     try {
       const { veri, uzanti } = await this._getir(faviconUrl, birinciTaraf);
@@ -336,4 +379,4 @@ class FaviconDeposu {
   }
 }
 
-module.exports = { FaviconDeposu, SEMA, alanTemiz, faviconBirinciTarafMi };
+module.exports = { FaviconDeposu, SEMA, alanTemiz, faviconBirinciTarafMi, adresOzelMi, yerelAdMi, ozelHedefMi };

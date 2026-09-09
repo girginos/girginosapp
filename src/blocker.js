@@ -3,6 +3,7 @@
 const { LISTE } = require('./blocklist');
 const { cerezTasinsinMi } = require('./cerezler');
 const { UboMotor } = require('./ubo-motor');
+const httpsZorla = require('./https-zorla');
 
 /*
  * İki seviyeli son ekler. Kayıtlanabilir alan adını doğru bulmak için gerekli:
@@ -281,6 +282,18 @@ class Blocker {
     };
 
     ses.webRequest.onBeforeRequest(korumali('onBeforeRequest', (details, callback) => {
+      /*
+       * HTTPS ZORLAMA. Engelleme kararından ÖNCE: yükseltilecek istek zaten
+       * https'e gidecek, onu http hâliyle listelere sormanın anlamı yok.
+       * Yalnız üst düzey gezinme; ayrıntılar src/https-zorla.js'te.
+       */
+      if (details.resourceType === 'mainFrame') {
+        const yeni = httpsZorla.yukseltmeAdresi(details.url, {
+          acik: this.store.ayarlar.httpsZorla !== false
+        });
+        if (yeni) return callback({ redirectURL: yeni });
+      }
+
       if (this.engellensinMi(details)) {
         const wcId = details.webContentsId;
         if (wcId != null) this.sayaclar.set(wcId, (this.sayaclar.get(wcId) || 0) + 1);

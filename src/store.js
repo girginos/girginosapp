@@ -24,6 +24,13 @@ const DEFAULTS = {
     // Kapanışta çerezleri sil. Yer imlerindeki siteler korunur: onlar
     // kullanıcının bilerek sakladığı, oturumunu kaybetmek istemediği siteler.
     kapanistaCerezSil: false,
+    // HTTPS-First: ust duzey gezinmeler https e yukseltilir, sunucu HTTPS
+    // konusmuyorsa o host icin geri dusulur (bkz. src/https-zorla.js).
+    httpsZorla: true,
+    // Cerez kasasinin IKINCI katmani: kullanicidan gelen ana parola. Anahtar
+    // diske yazilmaz; acilista sorulur. Varsayilan KAPALI (her acilista parola
+    // yazmak istemeyeni zorlamayalim).
+    anaParolaAcik: false,
     // Vekil sunucu. 'kapali' | 'sistem' | 'elle'
     // Tor için: elle + socks5://127.0.0.1:9050
     vekilKip: 'sistem',

@@ -1432,6 +1432,10 @@ function ayarlarPaneli() {
 
   g.appendChild(ayarSatiri(cev('ayar.engelleyici'), cev('ayar.engelleyiciAciklama'),
     anahtar(a.engelleyiciAcik, (v) => window.pusula.ayarDegistir('engelleyiciAcik', v))));
+  g.appendChild(ayarSatiri(cev('ayar.httpsZorla'), cev('ayar.httpsZorlaAciklama'),
+    anahtar(a.httpsZorla !== false, (v) => window.pusula.ayarDegistir('httpsZorla', v))));
+  g.appendChild(ayarSatiri(cev('ayar.anaParola'), cev('ayar.anaParolaAciklama'),
+    anahtar(!!a.anaParolaAcik, (v) => window.pusula.ayarDegistir('anaParolaAcik', v))));
   g.appendChild(ayarSatiri(cev('ayar.dnt'), cev('ayar.dntAciklama'),
     anahtar(a.dntGonder, (v) => window.pusula.ayarDegistir('dntGonder', v))));
   g.appendChild(ayarSatiri(cev('ayar.ucuncuTarafCerez'), cev('ayar.ucuncuTarafCerezAciklama'),

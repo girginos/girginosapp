@@ -14,6 +14,8 @@ const preload = oku('preload.js');
 // Katman görünümünün ayrı ve dar bir köprüsü var; 'katman:*' kanalları
 // preload.js'te değil burada karşılanıyor.
 const katmanOnyukleme = oku('ui/katman-onyukleme.js');
+// Ana parola penceresinin de kendi dar köprüsü var ('anaparola:*').
+const anaParolaOnyukleme = oku('ui/anaparola-onyukleme.js');
 const main = oku('main.js');
 const app = oku('ui/app.js');
 const html = oku('ui/index.html');
@@ -30,13 +32,16 @@ const fark = (a, b) => [...a].filter((x) => !b.has(x));
 
 const preSend = new Set([
   ...topla(preload, /ipcRenderer\.send\('([^']+)'/g),
-  ...topla(katmanOnyukleme, /ipcRenderer\.send\('([^']+)'/g)
+  ...topla(katmanOnyukleme, /ipcRenderer\.send\('([^']+)'/g),
+  ...topla(anaParolaOnyukleme, /ipcRenderer\.send\('([^']+)'/g)
 ]);
 const preInvoke = topla(preload, /ipcRenderer\.invoke\('([^']+)'/g);
 const preDinle = new Set([
   ...topla(preload, /dinle\('([^']+)'\)/g),
-  // katman-onyukleme.js dinlemeyi doğrudan ipcRenderer.on ile kuruyor
-  ...topla(katmanOnyukleme, /ipcRenderer\.on\('([^']+)'/g)
+  // katman-onyukleme.js ve anaparola-onyukleme.js dinlemeyi doğrudan
+  // ipcRenderer.on ile kuruyor.
+  ...topla(katmanOnyukleme, /ipcRenderer\.on\('([^']+)'/g),
+  ...topla(anaParolaOnyukleme, /ipcRenderer\.on\('([^']+)'/g)
 ]);
 const preApi = topla(preload, /^ {2}([A-Za-z][A-Za-z0-9]*):/gm);
 

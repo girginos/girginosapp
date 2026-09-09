@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'none'; style-src 'self' 'unsafe-inline'; script-src 'self'; base-uri 'none'; form-action 'none'">
+<title>Ana parola</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  html, body { height: 100%; overflow: hidden; }
+  body { display: grid; place-items: center; padding: 18px; background: var(--zemin); }
+  .kutu { width: 100%; max-width: 380px; }
+  .ap-baslik { display: flex; align-items: center; gap: 9px; margin-bottom: 6px; font-size: 15px; font-weight: 700; }
+  .ap-baslik svg { width: 20px; height: 20px; color: var(--vurgu); }
+  .ap-aciklama { color: var(--metin2); font-size: 12.5px; line-height: 1.5; margin-bottom: 14px; }
+  .ap-alan { margin-bottom: 10px; }
+  .ap-alan label { display: block; font-size: 12px; font-weight: 600; color: var(--metin2); margin-bottom: 5px; }
+  .ap-girdi {
+    width: 100%; box-sizing: border-box; height: 36px; padding: 0 12px;
+    border: 1px solid var(--cizgi); border-radius: 10px;
+    background: var(--kart); color: var(--metin); font: inherit; font-size: 13.5px; outline: none;
+    transition: border-color var(--gecis), box-shadow var(--gecis);
+  }
+  .ap-girdi:focus { border-color: var(--vurgu); box-shadow: 0 0 0 3px var(--vurgu-yumusak); }
+  .ap-hata { color: var(--tehlike); font-size: 12px; min-height: 16px; margin: 2px 0 8px; }
+  .ap-dugmeler { display: flex; gap: 8px; }
+  .ap-dugmeler button {
+    flex: 1; height: 36px; border-radius: 10px; border: 1px solid var(--cizgi);
+    background: var(--kart); color: var(--metin); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+    transition: border-color var(--gecis), background var(--gecis), color var(--gecis);
+  }
+  .ap-dugmeler button:hover { border-color: var(--vurgu); color: var(--vurgu); }
+  .ap-dugmeler .birincil { border-color: transparent; background: var(--vurgu); color: #fff; }
+  .ap-dugmeler .birincil:hover { filter: brightness(1.08); color: #fff; }
+  .ap-not { color: var(--metin2); font-size: 11.5px; line-height: 1.5; margin-top: 12px; }
+</style>
+</head>
+<body>
+  <div class="kutu">
+    <div class="ap-baslik">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>
+      </svg>
+      <span id="apBaslik">Ana parola</span>
+    </div>
+    <p class="ap-aciklama" id="apAciklama"></p>
+
+    <div class="ap-alan">
+      <label for="apParola" id="apEtiket">Parola</label>
+      <input type="password" id="apParola" class="ap-girdi" autocomplete="off" spellcheck="false" autofocus>
+    </div>
+    <div class="ap-alan" id="apTekrarAlan" hidden>
+      <label for="apTekrar" id="apTekrarEtiket">Parolayı tekrar yaz</label>
+      <input type="password" id="apTekrar" class="ap-girdi" autocomplete="off" spellcheck="false">
+    </div>
+
+    <div class="ap-hata" id="apHata"></div>
+
+    <div class="ap-dugmeler">
+      <button type="button" id="apAtla">Atla</button>
+      <button type="button" id="apTamam" class="birincil">Aç</button>
+    </div>
+    <p class="ap-not" id="apNot"></p>
+  </div>
+  <script src="anaparola.js"></script>
+</body>
+</html>

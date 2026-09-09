@@ -99,12 +99,22 @@ app.whenReady().then(async () => {
   bak('birinci taraf simge çerezle istendi', /gecti=1/.test(faviconCerez[konak] || ''), true);
   bak('birinci taraf simge diske yazıldı', fav.adres(konak) !== '', true);
 
-  /* 2) ÜÇÜNCÜ TARAF simge: kimliksiz kalmalı (cerez GITMEMELI). */
-  // Sayfa 127.0.0.1 iken localhost'tan simge = ayri kok = ucuncu taraf.
+  /*
+   * 2) ÜÇÜNCÜ TARAF + ÖZEL ADRES: artık HİÇ İSTEK ATILMIYOR.
+   *
+   * Eskiden bu istek yalnızca KİMLİKSİZ atılıyordu ('' beklenirdi). Sonra iç ağ
+   * koruması eklendi: simge adresini sayfa seçtiği ve isteği ana süreç attığı
+   * için sayfanın CORS/PNA kısıtları uygulanmıyordu; genel bir sayfa bu yolla
+   * iç ağı yoklatabiliyordu (PoC 127.0.0.1'e ulaşmıştı). Artık özel/yerel hedefe
+   * yalnızca sayfa da oradaysa gidiliyor. Bu, eski garantiden GÜÇLÜ: çerez
+   * gitmemesi bir yana, bağlantı hiç kurulmuyor.
+   * undefined = sunucuya hiç uğranmadı ('' olsaydı istek gitmiş olurdu).
+   */
   faviconCerez['localhost'] = undefined;
   await fav.kaydet('baska-alan.test', 'http://localhost:' + PORT + '/favicon.ico', { ziyaretEdildi: true });
   await bekle(300);
-  bak('üçüncü taraf simge çerezsiz istendi', faviconCerez['localhost'], '');
+  bak('üçüncü taraf + özel adres: istek hiç atılmadı', faviconCerez['localhost'], undefined);
+  bak('üçüncü taraf + özel adres: diske yazılmadı', fav.adres('baska-alan.test'), '');
 
   /* 3) ÖN-ISITMA (ziyaretEdildi yok): birinci taraf olsa da kimliksiz. */
   // Once cerezi temizle ki gecmis istekten kalan etkiyi olcmeyelim.

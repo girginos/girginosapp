@@ -317,6 +317,198 @@ esit('her kayıt geçerli alan adı biçiminde', LISTE.filter(d => !ALAN_BICIMI.
   try { require('node:fs').unlinkSync(yol); } catch { /* olsun */ }
 }
 
+/* ---- favicon: iç ağ (SSRF) koruması ----
+ * Simge adresini SAYFA seçiyor ama isteği ANA SÜREÇ atıyor; sayfanın CORS/PNA
+ * kısıtları uygulanmadığı için genel bir sayfa iç ağı yoklatabiliyordu
+ * (ölçüldü: PoC 127.0.0.1'e ulaşmıştı). Aşağıdaki yüklem o kapının kilidi. */
+{
+  const { adresOzelMi, yerelAdMi, alanTemiz } = require('../src/faviconlar');
+
+  const OZEL = ['127.0.0.1', '127.1.2.3', '10.0.0.1', '10.255.255.255', '172.16.0.1',
+    '172.31.255.255', '192.168.1.1', '169.254.169.254', '0.0.0.0', '100.64.0.1',
+    '192.0.0.1', '198.18.0.1', '224.0.0.1', '240.0.0.1',
+    '::1', '::', 'fc00::1', 'fd12::9', 'fe80::1', '::ffff:127.0.0.1', '::ffff:192.168.0.5'];
+  for (const ip of OZEL) esit('özel adres engellenir: ' + ip, adresOzelMi(ip), true);
+
+  // Sınır komşuları GENEL kalmalı: aşırı engelleme de bir hata.
+  const GENEL = ['8.8.8.8', '1.1.1.1', '172.15.0.1', '172.32.0.1', '192.167.1.1',
+    '100.63.255.255', '100.128.0.1', '11.0.0.1', '126.255.255.255', '223.255.255.255',
+    '2606:4700::1111', 'fe00::1', 'fb00::1'];
+  for (const ip of GENEL) esit('genel adres serbest: ' + ip, adresOzelMi(ip), false);
+
+  esit('bozuk adres özel sayılmaz', adresOzelMi('999.1.1.1'), false);
+  esit('boş adres özel sayılmaz', adresOzelMi(''), false);
+
+  esit('localhost yerel', yerelAdMi('localhost'), true);
+  esit('alt alan localhost yerel', yerelAdMi('yonlendirme.localhost'), true);
+  esit('mDNS .local yerel', yerelAdMi('yazici.local'), true);
+  esit('.internal yerel', yerelAdMi('kasa.internal'), true);
+  esit('home.arpa yerel', yerelAdMi('router.home.arpa'), true);
+  esit('sondaki nokta atlatamaz', yerelAdMi('localhost.'), true);
+  esit('genel alan yerel değil', yerelAdMi('girginos.app'), false);
+  // "notlocalhost" localhost ile bitiyor ama etiket sınırı yok: yerel DEĞİL.
+  esit('etiket sınırı korunur', yerelAdMi('notlocalhost'), false);
+  esit('yerel benzeri genel alan', yerelAdMi('local.example.com'), false);
+
+  // Tarayıcının iddia ettiği path-traversal vektörü: alanTemiz zaten kapatıyor.
+  for (const kotu of ['../../etc/passwd', 'evil.com/../x', 'evil.com@169.254.169.254',
+    '127.0.0.1:8080', 'evil.com?x=1', 'evil.com#f', 'a..b.com', 'EVİL.com/x']) {
+    esit('alanTemiz reddeder: ' + kotu, alanTemiz(kotu), '');
+  }
+  esit('normal alan geçer', alanTemiz('WWW.Girginos.app'), 'girginos.app');
+
+  /*
+   * Kimlik kararı (birinci taraf mı?) burada saf olarak sınanıyor: ağ testinde
+   * üçüncü taraf senaryosu artık iç ağ koruması yüzünden hiç istek atmıyor, bu
+   * yüzden "üçüncü tarafa çerez gitmez" kuralının kapsamı buraya taşındı.
+   */
+  const { faviconBirinciTarafMi } = require('../src/faviconlar');
+  esit('aynı alan birinci taraf', faviconBirinciTarafMi('ornek.com', 'https://ornek.com/f.ico'), true);
+  esit('alt alan birinci taraf', faviconBirinciTarafMi('a.ornek.com', 'https://b.ornek.com/f.ico'), true);
+  esit('www farkı birinci taraf', faviconBirinciTarafMi('www.ornek.com', 'https://ornek.com/f.ico'), true);
+  esit('başka alan üçüncü taraf', faviconBirinciTarafMi('ornek.com', 'https://izleyici.net/f.ico'), false);
+  // Klasik tuzak: "ornek.com" ile "ornek.com.izleyici.net" karışmamalı.
+  esit('son ek tuzağı üçüncü taraf', faviconBirinciTarafMi('ornek.com', 'https://ornek.com.izleyici.net/f.ico'), false);
+  esit('boş sayfa hostu birinci taraf değil', faviconBirinciTarafMi('', 'https://ornek.com/f.ico'), false);
+}
+
+/* ---- çerez kasası: kayıt/geri yükleme sadakati ----
+ * Electron çerezleri diskte DÜZ METİN tutuyordu (ölçüldü). Kasa onları
+ * safeStorage ile şifreliyor; geri yüklemede tek bir alan bile kayarsa
+ * kullanıcı oturumunu kaybeder, o yüzden dönüşüm burada sınanıyor. */
+{
+  const { kayitYap, setArgumani, kasaYolu, KASA_ADI } = require('../src/cerez-kasa');
+  const SIMDI = 1000000;
+  const ILERI = SIMDI + 86400;
+
+  const hostOnly = kayitYap({
+    name: 'oturum', value: 'v1', domain: 'banka.test', hostOnly: true, path: '/hesap',
+    secure: true, httpOnly: true, expirationDate: ILERI, sameSite: 'lax'
+  });
+  const a1 = setArgumani(hostOnly, SIMDI);
+  esit('host-only: domain GÖNDERİLMEZ', 'domain' in a1, false);
+  esit('host-only: url şemadan kurulur', a1.url, 'https://banka.test/hesap');
+  esit('host-only: yol korunur', a1.path, '/hesap');
+  esit('host-only: httpOnly korunur', a1.httpOnly, true);
+  esit('host-only: sameSite korunur', a1.sameSite, 'lax');
+
+  const alanCerezi = kayitYap({
+    name: 'sid', value: 'v2', domain: '.forum.test', hostOnly: false, path: '/',
+    secure: true, httpOnly: false, expirationDate: ILERI, sameSite: 'unspecified'
+  });
+  const a2 = setArgumani(alanCerezi, SIMDI);
+  esit('alan çerezi: domain GÖNDERİLİR', a2.domain, '.forum.test');
+  esit('alan çerezi: url baştaki noktasız', a2.url, 'https://forum.test/');
+  esit('unspecified sameSite atlanır', 'sameSite' in a2, false);
+
+  const duz = setArgumani(kayitYap({
+    name: 'x', value: 'v', domain: 'duz.test', hostOnly: true, path: '/',
+    secure: false, expirationDate: ILERI
+  }), SIMDI);
+  esit('güvensiz çerez http url alır', duz.url, 'http://duz.test/');
+
+  // Reddedilmesi gerekenler: süresi geçmiş / oturumluk / eksik alan
+  esit('süresi geçmiş kayıt reddedilir',
+    setArgumani(kayitYap({ name: 'a', value: 'b', domain: 'x.test', hostOnly: true, expirationDate: SIMDI - 1 }), SIMDI), null);
+  esit('bitişsiz (oturumluk) kayıt reddedilir',
+    setArgumani(kayitYap({ name: 'a', value: 'b', domain: 'x.test', hostOnly: true }), SIMDI), null);
+  esit('adsız kayıt reddedilir',
+    setArgumani(kayitYap({ name: '', value: 'b', domain: 'x.test', hostOnly: true, expirationDate: ILERI }), SIMDI), null);
+  esit('alansız kayıt reddedilir',
+    setArgumani(kayitYap({ name: 'a', value: 'b', domain: '', hostOnly: true, expirationDate: ILERI }), SIMDI), null);
+  esit('bozuk kayıt çökertmez', setArgumani(null, SIMDI), null);
+
+  esit('kasa dosya adı sabit', kasaYolu('/kok').endsWith(KASA_ADI), true);
+
+  /* --- İkinci katman: ana parola (AES-256-GCM + scrypt) --- */
+  const kk = require('../src/cerez-kasa');
+  const UCUZ = { ad: 'scrypt', N: 1 << 12, r: 8, p: 1, uzunluk: 32 };   // test için hızlı
+  const TUZ = Buffer.from('test-tuzu-16-bay').toString('base64');
+  const TUZ2 = Buffer.from('baska-tuz-16-bay').toString('base64');
+
+  const anah1 = kk.anahtarUret('parola', TUZ, UCUZ);
+  esit('anahtar 32 bayt', anah1.length, 32);
+  esit('aynı parola+tuz aynı anahtarı verir', kk.anahtarUret('parola', TUZ, UCUZ).equals(anah1), true);
+  esit('farklı parola farklı anahtar', kk.anahtarUret('baska', TUZ, UCUZ).equals(anah1), false);
+  // Tuz farkı anahtarı değiştirir: kasadaki tuz, anahtarın türetildiği tuz olmalı.
+  esit('farklı TUZ farklı anahtar', kk.anahtarUret('parola', TUZ2, UCUZ).equals(anah1), false);
+  esit('tuzsuz türetme reddedilir', (() => { try { kk.anahtarUret('p', ''); return 'gecti'; } catch { return 'reddedildi'; } })(), 'reddedildi');
+
+  const zarf = kk.icKatmanSifrele(JSON.stringify({ cerezler: [{ ad: 'x', deger: 'GIZLI_DEGER' }] }), anah1, TUZ);
+  esit('zarf gövdesinde düz metin yok',
+    Buffer.from(zarf.govde, 'base64').includes(Buffer.from('GIZLI_DEGER')), false);
+  esit('zarf tuzu taşır (geri türetme için)', zarf.kdf.tuz, TUZ);
+  esit('doğru anahtar çözer', JSON.parse(kk.icKatmanCoz(zarf, anah1)).cerezler[0].deger, 'GIZLI_DEGER');
+  esit('yanlış anahtar ÇÖZEMEZ',
+    (() => { try { kk.icKatmanCoz(zarf, kk.anahtarUret('yanlis', TUZ, UCUZ)); return 'cozdu'; } catch { return 'reddedildi'; } })(),
+    'reddedildi');
+  // GCM kimlik doğrulaması: kurcalanmış kasa sessizce yanlış veri vermez.
+  esit('kurcalanmış gövde reddedilir', (() => {
+    const b = Buffer.from(zarf.govde, 'base64'); b[0] ^= 1;
+    try { kk.icKatmanCoz({ ...zarf, govde: b.toString('base64') }, anah1); return 'cozdu'; } catch { return 'reddedildi'; }
+  })(), 'reddedildi');
+
+  /*
+   * TUZ-ANAHTAR BAĞI. İlk yazımda disariAktar kendi yeni tuzunu üretiyordu;
+   * anahtar başka tuzdan türetildiği için DOĞRU parola bile kasayı açamıyordu
+   * (gerçek Electron testi yakaladı). Artık tuz anahtarla birlikte gelmeli.
+   */
+  {
+    let yazildiMi = false;
+    const sahteOturum = { cookies: { get: async () => [], flushStore: async () => {} }, clearStorageData: async () => { yazildiMi = true; } };
+    const sahteGuvenli = { isEncryptionAvailable: () => true, encryptString: (s) => Buffer.from(s), decryptString: (b) => b.toString() };
+    const sonuc = kk.disariAktar({
+      oturum: sahteOturum, safeStorage: sahteGuvenli, veriDizini: require('node:os').tmpdir(),
+      anahtar: anah1, tuz: null, gunluk: { error: () => {} }
+    });
+    sonuc.then((s) => {
+      esit('tuzsuz anahtar kasayı yazmaz', s.sebep, 'tuz-yok');
+      esit('tuzsuz durumda çerezler SİLİNMEZ', s.silindi, false);
+      esit('tuzsuz durumda depo boşaltılmadı', yazildiMi, false);
+    });
+  }
+}
+
+/* ---- HTTPS zorlama (HTTPS-First) ----
+ * Düz HTTP'de oturum çerezi ağı dinleyen herkese açık. Üst düzey gezinmeler
+ * https'e yükseltiliyor; intranet ve HTTPS konuşmayan hostlar muaf. */
+{
+  const hz = require('../src/https-zorla');
+  hz.istisnalariTemizle();
+
+  esit('http yükseltilir', hz.yukseltmeAdresi('http://ornek.com/a?b=1'), 'https://ornek.com/a?b=1');
+  esit('port 80 düşürülür', hz.yukseltmeAdresi('http://ornek.com:80/a'), 'https://ornek.com/a');
+  esit('https dokunulmaz', hz.yukseltmeAdresi('https://ornek.com/'), null);
+  esit('ayar kapalıyken dokunulmaz', hz.yukseltmeAdresi('http://ornek.com/', { acik: false }), null);
+  // İntranet muaf: çoğu yerel cihaz yalnız http konuşur, kırmak istemiyoruz.
+  esit('loopback muaf', hz.yukseltmeAdresi('http://127.0.0.1/'), null);
+  esit('özel ağ muaf', hz.yukseltmeAdresi('http://192.168.1.1/'), null);
+  esit('localhost muaf', hz.yukseltmeAdresi('http://localhost:3000/'), null);
+  esit('.local muaf', hz.yukseltmeAdresi('http://yazici.local/'), null);
+  // Varsayılan olmayan port çoğunlukla http'ye özgü; çevirmek bağlantıyı kırardı.
+  esit('varsayılan olmayan port muaf', hz.yukseltmeAdresi('http://ornek.com:8080/'), null);
+  esit('web dışı şema dokunulmaz', hz.yukseltmeAdresi('ftp://ornek.com/'), null);
+  esit('bozuk adres çökertmez', hz.yukseltmeAdresi('http://'), null);
+
+  // İstisna: https denenip konuşmadığı görülen host bir daha yükseltilmez.
+  hz.istisnaEkle('eski.com');
+  esit('istisnadaki host yükseltilmez', hz.yukseltmeAdresi('http://eski.com/x'), null);
+  esit('istisna büyük/küçük harf duyarsız', hz.yukseltmeAdresi('http://ESKI.com/x'), null);
+  esit('istisna başka hosta bulaşmaz', hz.yukseltmeAdresi('http://yeni.com/x'), 'https://yeni.com/x');
+  hz.istisnalariTemizle();
+  esit('istisnalar temizlenince yeniden yükseltilir', hz.yukseltmeAdresi('http://eski.com/x'), 'https://eski.com/x');
+
+  // Geri düşme YALNIZ "sunucu HTTPS konuşmuyor" hatalarında; sertifika
+  // hatasında düşmek MITM saldırganının işine yarardı.
+  esit('bağlantı reddinde geri düşülür', hz.geriDusulurMu(-102), true);
+  esit('SSL protokol hatasında geri düşülür', hz.geriDusulurMu(-107), true);
+  esit('zaman aşımında geri düşülür', hz.geriDusulurMu(-7), true);
+  esit('sertifika adı hatasında GERİ DÜŞÜLMEZ', hz.geriDusulurMu(-200), false);
+  esit('sertifika makamı hatasında GERİ DÜŞÜLMEZ', hz.geriDusulurMu(-202), false);
+  esit('iptalde (abort) geri düşülmez', hz.geriDusulurMu(-3), false);
+  esit('404 gibi kod geri düşürmez', hz.geriDusulurMu(404), false);
+}
+
 /* ---- kullanici araci ---- */
 /*
  * uaTemizle() KALDIRILDI ve testleri de. Dizeden "Electron/x" ile uygulama

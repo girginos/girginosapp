@@ -2,7 +2,7 @@
 
 const {
   app, BrowserWindow, WebContentsView, ipcMain, shell, session,
-  dialog, Menu, clipboard, nativeTheme, protocol, webFrameMain, net
+  dialog, Menu, clipboard, nativeTheme, protocol, webFrameMain, net, safeStorage
 } = require('electron');
 const path = require('node:path');
 
@@ -39,6 +39,8 @@ const {
 } = require('./src/menu-yerlesim');
 const { SertifikaDeposu } = require('./src/sertifikalar');
 const { silinecekCerezler, cerezSilmeUrl } = require('./src/cerezler');
+const cerezKasa = require('./src/cerez-kasa');
+const httpsZorla = require('./src/https-zorla');
 const { vekilKurallari, adresGecerliMi, atlamaGecerliMi } = require('./src/vekil');
 const { vpnVekilKurali, lokasyonGecerliMi: vpnLokasyonGecerliMi, katalog: vpnKatalog, vpnKayitUrl } = require('./src/vpn');
 const { vekilliFetch } = require('./src/vekil-istek');
@@ -656,6 +658,26 @@ function olaylariBagla(t) {
      * sıkışmadan önce olur, yani gövde henüz gönderilmemiştir; yine de
      * güvende kalmak için yalnızca bir kez.
      */
+    /*
+     * HTTPS ZORLAMA GERİ DÜŞMESİ. Adresi https'e biz yükselttiysek ve sunucu
+     * HTTPS konuşmuyorsa (bağlantı reddi/sıfırlama/zaman aşımı/SSL protokol)
+     * o hostu bu oturum için istisnaya alıp http ile açıyoruz; aksi hâlde
+     * yalnız http sunan siteler tamamen erişilemez olurdu. SERTİFİKA hataları
+     * buraya girmez: orada Chromium'un uyarısı görünmeli (bkz. https-zorla.js).
+     */
+    if (httpsZorla.geriDusulurMu(kod) && /^https:\/\//i.test(adres || '')) {
+      try {
+        const u = new URL(adres);
+        if (!httpsZorla.istisnaVarMi(u.hostname)) {
+          httpsZorla.istisnaEkle(u.hostname);
+          u.protocol = 'http:';
+          console.log('HTTPS zorlama: ' + u.hostname + ' HTTPS konuşmuyor (' + kod + '), http ile açılıyor');
+          setTimeout(() => { if (!wc.isDestroyed()) wc.loadURL(u.toString()); }, 0);
+          return;
+        }
+      } catch { /* adres ayrıştırılamadı: normal hata akışına düş */ }
+    }
+
     if (kod === -101 && t.sonReset !== adres) {
       t.sonReset = adres;
       setTimeout(() => { if (!wc.isDestroyed()) wc.reload(); }, 250);
@@ -1010,6 +1032,8 @@ function menuKonumu(genislik, konum) {
  */
 const CEREZ_TEMIZLIK_SINIRI = 4000;
 let cikistaTemizlendi = false;
+// Ana parola anahtarı: YALNIZ bellekte, diske hiç yazılmaz.
+let anaParolaAnahtari = null;
 
 async function kapanistaCerezleriSil() {
   const is = (async () => {
@@ -1027,6 +1051,114 @@ async function kapanistaCerezleriSil() {
   await Promise.race([is.catch((e) => console.error('Çerezler silinemedi:', e.message)), sinir]);
   // Sessizce yarim kalmasin: bir dahaki kapanista tamamlanacagini bilelim.
   if (!bitti) console.error('Çerez temizliği ' + CEREZ_TEMIZLIK_SINIRI + ' ms icinde bitmedi; kalanlar bir sonraki kapanista silinecek.');
+}
+
+/*
+ * Kapanışta kalıcı çerezleri şifreli kasaya alıp düz metin depoyu boşaltır.
+ * Çıkışı süresiz bekletmemek için sınırlı; sınır aşılırsa kasa yazılmış ama
+ * depo boşaltılmamış olabilir - bu VERİ KAYBI DEĞİL, yalnızca o kapanışta
+ * koruma uygulanmamış olur (bir dahaki kapanışta yine denenir).
+ */
+async function cerezleriKasayaAl() {
+  /*
+   * Ana parola AÇIK ama anahtar elimizde yoksa (kullanıcı açılışta atladı):
+   * kasaya DOKUNMUYORUZ. Üstüne yazmak, kasadaki gerçek oturumları geri
+   * getirilemez biçimde yok etmek olurdu. Bu oturumun çerezleri korumasız
+   * kalır - kullanıcı atlamayı seçti, durumu loglayıp geçiyoruz.
+   */
+  if (store.ayarlar.anaParolaAcik && !anaParolaAnahtari) {
+    console.log('Çerez kasası: ana parola girilmedi; kasa korundu, bu oturum şifrelenmedi.');
+    return;
+  }
+  const is = (async () => {
+    const s = await cerezKasa.disariAktar({
+      oturum: ses, safeStorage, veriDizini: app.getPath('userData'),
+      anahtar: store.ayarlar.anaParolaAcik && anaParolaAnahtari ? anaParolaAnahtari.anahtar : null,
+      tuz: store.ayarlar.anaParolaAcik && anaParolaAnahtari ? anaParolaAnahtari.tuz : null
+    });
+    console.log('Çerez kasası: ' + s.yazilan + ' çerez şifrelendi'
+      + (store.ayarlar.anaParolaAcik ? ' (DPAPI + ana parola)' : ' (DPAPI)')
+      + (s.silindi ? ', düz metin depo boşaltıldı' : ' (depo BOŞALTILMADI: ' + (s.sebep || '?') + ')'));
+  })().catch((e) => console.error('Çerez kasası yazılamadı:', e.message));
+  await Promise.race([is, new Promise((coz) => setTimeout(coz, CEREZ_TEMIZLIK_SINIRI))]);
+}
+
+/*
+ * ANA PAROLA PENCERESİ. Kasanın ikinci katmanı kullanıcıdan gelen bir sır;
+ * anahtar hiçbir yere YAZILMIYOR, yalnız bu oturum boyunca bellekte duruyor.
+ * Ana pencereden ÖNCE açılıyor: çerezler geri yüklenmeden sayfa yüklenmesin.
+ *
+ * @param {'sor'|'kur'} kip  'sor': kasayı aç · 'kur': yeni parola belirle
+ * @param {Function} dene    (anahtar) => boolean; parola doğru mu?
+ * @returns {Promise<Buffer|null>} null = kullanıcı atladı/vazgeçti
+ */
+function anaParolaSor({ kip = 'sor', kdf = null, dene = () => true } = {}) {
+  return new Promise((coz) => {
+    const pen = new BrowserWindow({
+      width: 460, height: kip === 'kur' ? 430 : 360,
+      resizable: false, minimizable: false, maximizable: false,
+      title: cev('anaparola.baslik'),
+      backgroundColor: nativeTheme.shouldUseDarkColors ? '#16181d' : '#eef0f4',
+      show: false, autoHideMenuBar: true,
+      webPreferences: {
+        preload: path.join(__dirname, 'ui', 'anaparola-onyukleme.js'),
+        contextIsolation: true, nodeIntegration: false, sandbox: true, webviewTag: false
+      }
+    });
+
+    let bitti = false;
+    const bizden = (e) => !pen.isDestroyed() && e.sender === pen.webContents;
+    const kapat = (sonuc) => {
+      if (bitti) return;
+      bitti = true;
+      ipcMain.removeListener('anaparola:hazir', hazirIsleyici);
+      ipcMain.removeListener('anaparola:gonder', gonderIsleyici);
+      ipcMain.removeListener('anaparola:atla', atlaIsleyici);
+      if (!pen.isDestroyed()) pen.destroy();
+      coz(sonuc);
+    };
+
+    const icerikYolla = (hata = '') => {
+      if (pen.isDestroyed()) return;
+      pen.webContents.send('anaparola:icerik', {
+        kip, hata, dil: ceviriler.dil, yon: ceviriler.yon,
+        metin: {
+          baslik: cev('anaparola.baslik'),
+          aciklama: cev(kip === 'kur' ? 'anaparola.aciklamaKur' : 'anaparola.aciklama'),
+          etiket: cev('anaparola.etiket'),
+          tekrarEtiket: cev('anaparola.tekrar'),
+          atla: cev(kip === 'kur' ? 'anaparola.vazgec' : 'anaparola.atla'),
+          tamam: cev(kip === 'kur' ? 'anaparola.kaydet' : 'anaparola.ac'),
+          not: cev('anaparola.not')
+        }
+      });
+    };
+
+    const hazirIsleyici = (e) => { if (bizden(e)) { icerikYolla(); pen.show(); } };
+    const atlaIsleyici = (e) => { if (bizden(e)) kapat(null); };
+    const gonderIsleyici = (e, parola) => {
+      if (!bizden(e)) return;
+      try {
+        const tuz = kip === 'kur'
+          ? require('node:crypto').randomBytes(16).toString('base64')
+          : (kdf && kdf.tuz);
+        const anahtar = kdf
+          ? cerezKasa.anahtarUret(String(parola || ''), tuz, kdf)
+          : cerezKasa.anahtarUret(String(parola || ''), tuz);
+        // Tuz anahtarla BİRLİKTE taşınır: kasayı yazarken aynısı kullanılmalı.
+        if (kip === 'kur' || dene(anahtar)) return kapat({ anahtar, tuz });
+        icerikYolla(cev('anaparola.yanlis'));   // yanlış parola: tekrar sorulur
+      } catch (hata) {
+        icerikYolla(cev('anaparola.yanlis'));
+      }
+    };
+
+    ipcMain.on('anaparola:hazir', hazirIsleyici);
+    ipcMain.on('anaparola:gonder', gonderIsleyici);
+    ipcMain.on('anaparola:atla', atlaIsleyici);
+    pen.on('closed', () => kapat(null));
+    pen.loadFile(path.join(__dirname, 'ui', 'anaparola.html'));
+  });
 }
 
 /*
@@ -1742,6 +1874,28 @@ async function vekiliUygula() {
 async function oturumKur() {
   ses = session.fromPartition(OTURUM);
 
+  /*
+   * ÇEREZ KASASI GERİ YÜKLEME. Sayfalar açılmadan ÖNCE olmalı; oturumKur()
+   * bekleniyor ve pencere ondan sonra açılıyor (bkz. çağıran taraf).
+   */
+  try {
+    const s = await cerezKasa.iceAktar({
+      oturum: ses, safeStorage, veriDizini: app.getPath('userData'),
+      // Kasa ana parolalıysa kullanıcıya sorulur; anahtar bellekte tutulur
+      // (kapanışta yeniden şifrelemek için). Atlarsa kasa olduğu gibi kalır.
+      anahtarSagla: async (kdf, dene) => {
+        const sonuc = await anaParolaSor({ kip: 'sor', kdf, dene });
+        anaParolaAnahtari = sonuc;             // { anahtar, tuz } - kapanışta gerekli
+        return sonuc && sonuc.anahtar;
+      }
+    });
+    if (s.vardi) console.log('Çerez kasası: ' + s.yuklenen + ' çerez geri yüklendi'
+      + (s.atlanan ? ', ' + s.atlanan + ' atlandı (süresi geçmiş/geçersiz)' : '')
+      + (s.atlandi ? ' (ana parola atlandı)' : ''));
+  } catch (e) {
+    console.error('Çerez kasası geri yüklenemedi:', e.message);
+  }
+
   antiAdblockKur();
   kararlilikKur();
 
@@ -2086,6 +2240,8 @@ const AYAR_DOGRULAMA = {
   dntGonder: (v) => typeof v === 'boolean',
   ucuncuTarafCerez: (v) => typeof v === 'boolean',
   kapanistaCerezSil: (v) => typeof v === 'boolean',
+  httpsZorla: (v) => typeof v === 'boolean',
+  anaParolaAcik: (v) => typeof v === 'boolean',
   vekilKip: (v) => v === 'kapali' || v === 'sistem' || v === 'elle',
   // Bos adres kabul ediliyor: kullanici once kutuyu doldurup sonra kipi
   // degistirmek isteyebilir. Bos adresle "elle" kipi zaten istekleri kesiyor.
@@ -2546,7 +2702,23 @@ function ipcKur() {
     if (p.anahtar === 'uboMotorAcik') blocker.uboyuKur();
     if (p.anahtar === 'tema') temayiUygula();
     if (p.anahtar.startsWith('vekil')) vekiliUygula();
-    if (p.anahtar === 'vpnAcik' || p.anahtar === 'vpnLokasyon') {
+    /*
+     * Ana parola açıldığında parolayı HEMEN kuruyoruz: anahtar bu oturum
+     * boyunca bellekte tutulup kapanışta kasayı şifrelemekte kullanılacak.
+     * Kullanıcı vazgeçerse ayarı geri alıyoruz - yoksa "açık" görünüp
+     * hiçbir şey şifrelemeyen sahte bir güvenlik olurdu.
+     */
+    if (p.anahtar === anaParolaAcik) {
+      if (p.deger) {
+        anaParolaSor({ kip: kur }).then((anahtar) => {
+          if (anahtar) { anaParolaAnahtari = anahtar; }
+          else { store.ayarla(anaParolaAcik, false); durumGonder(); }
+        });
+      } else {
+        anaParolaAnahtari = null;
+      }
+    }
+    if (p.anahtar === vpnAcik || p.anahtar === vpnLokasyon) {
       vekiliUygula();
       const sv = aktifSekme();
       if (sv && !sv.view.webContents.isDestroyed()) sv.view.webContents.reload();
@@ -2751,10 +2923,14 @@ if (!app.requestSingleInstanceLock()) {
    * Bu yüzden çıkış bir kez erteleniyor.
    */
   app.on('before-quit', (olay) => {
-    if (cikistaTemizlendi || !store || !store.ayarlar.kapanistaCerezSil) return;
+    if (cikistaTemizlendi || !store) return;
     cikistaTemizlendi = true;
     olay.preventDefault();
-    kapanistaCerezleriSil().finally(() => app.quit());
+    (async () => {
+      if (store.ayarlar.kapanistaCerezSil) await kapanistaCerezleriSil();
+      // Kalanları ŞİFRELİ kasaya al ve düz metin depoyu boşalt (bkz. cerez-kasa.js).
+      await cerezleriKasayaAl();
+    })().finally(() => app.quit());
   });
 
   app.on('will-quit', () => {
