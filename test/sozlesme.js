@@ -232,6 +232,17 @@ const vekilKacaklari = [];
     return dize ? dize[1] : sabitDeger(t);
   };
 
+  /*
+   * KASITLI DOGRUDAN (proxy'siz) oturumlar. Bunlar tarayici/kullanici trafigi
+   * TASIMAZ; dar, belirli bir is icin dogrudan cikarlar ve VEKIL listesine
+   * KONULAMAZ (aksi halde islevleri kirilir). Her yeni istisna burada gerekcesiyle
+   * yazilmali; liste disinda kalan her fromPartition hala kacak sayilir.
+   *   vpn-kayit: VPN cihaz kaydi (/kayit). Proxy'ye konursa token almak icin
+   *              zaten token gerekirdi (tavuk-yumurta). Bellek-ici oturum; yalniz
+   *              opak cihaz kimligi gider, gezinti verisi GITMEZ.
+   */
+  const VEKIL_MUAF = new Set(['vpn-kayit']);
+
   const listede = new Set();
   if (!listeEsleme) vekilKacaklari.push('main.js -> VEKIL_OTURUMLARI bulunamadi');
   else for (const p of listeEsleme[1].split(',')) {
@@ -242,7 +253,7 @@ const vekilKacaklari = [];
   for (const m of taranan.matchAll(/fromPartition\(\s*([^,)]+)/g)) {
     const ad = coz(m[1]);
     if (ad === null) vekilKacaklari.push('main.js -> fromPartition(' + m[1].trim() + ') cozulemedi');
-    else if (!listede.has(ad)) vekilKacaklari.push('main.js -> ' + ad);
+    else if (!listede.has(ad) && !VEKIL_MUAF.has(ad)) vekilKacaklari.push('main.js -> ' + ad);
   }
 
   // electron-updater kendi bolumunden istek atiyor; adi kaynaktan okunuyor ki

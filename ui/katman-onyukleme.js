@@ -24,9 +24,9 @@ contextBridge.exposeInMainWorld('katman', {
   // İzin kutusu. Karar tek seferlik; ana süreç kutuyu kapatır.
   izinKarar: (izinVer, hatirla) => ipcRenderer.send('katman:izin', { izinVer, hatirla }),
 
-  // VPN açılır kutusu
-  vpnAcKapa: (deger) => ipcRenderer.send('katman:vpn-ackapa', deger),
+  // VPN açılır kutusu. Aç/kapa OTOMATİK KAYIT içerir (token sunucudan alınır);
+  // invoke ile sonucu bekleyip UI güncellenir. Kullanıcı token girmez.
+  vpnAcKapa: (deger) => ipcRenderer.invoke('katman:vpn-ackapa', deger),
   vpnLokasyon: (id) => ipcRenderer.send('katman:vpn-lokasyon', id),
-  vpnToken: (t) => ipcRenderer.send('katman:vpn-token', t),
   vpnCikisIp: () => ipcRenderer.invoke('katman:vpn-ip')
 });

@@ -24,8 +24,13 @@ const { adresCoz, HEP_ATLANAN } = require('./vekil');
  * Kimlik doğrulama (cihaz token'ı) main.js'teki 'login' olayıyla veriliyor;
  * adrese GÖMÜLMÜYOR (proxyRules kimlik bilgisi taşıyamaz + sızdırmayalım).
  */
+/*
+ * ad ARTIK BURADA TUTULMUYOR: ülke adı dile göre değişir (Almanya/Germany/...).
+ * Görünen ad main.js'te cev('ulke.' + ulke) + ' #' + no ile kurulur; burada
+ * yalnızca dil-bağımsız kimlik var (ulke kodu + aynı ülkedeki sunucu sırası).
+ */
 const SUNUCULAR = [
-  { id: 'de-1', ad: 'Almanya #1', ulke: 'DE', sema: 'https', host: 'de-browservpn.girginos.app', port: 443, limitMbps: 100 }
+  { id: 'de-1', ulke: 'DE', no: 1, sema: 'https', host: 'de-browservpn.girginos.app', port: 443, limitMbps: 100 }
 ];
 
 function sunucuBul(id) {
@@ -57,9 +62,25 @@ function vpnVekilKurali(lokasyonId) {
   };
 }
 
-// Arayüz için sunucu listesi (host/port gizli tutulabilir; ad/ülke/limit yeter).
+// Arayüz için sunucu listesi (host/port gizli tutulabilir; ülke/sıra/limit yeter).
+// Görünen ad çağıranda (main.js) dile göre kurulur: cev('ulke.'+ulke) + ' #'+no.
 function katalog() {
-  return SUNUCULAR.map((s) => ({ id: s.id, ad: s.ad, ulke: s.ulke, limitMbps: s.limitMbps }));
+  return SUNUCULAR.map((s) => ({ id: s.id, ulke: s.ulke, no: s.no, limitMbps: s.limitMbps }));
 }
 
-module.exports = { SUNUCULAR, sunucuBul, lokasyonGecerliMi, vpnVekilKurali, katalog };
+/*
+ * Cihaz kaydı (otomatik token) uç noktasının URL'i. İstemci cihaz kimliğini
+ * gönderir, sunucu HMAC ile üretilmiş token'ı döner — kullanıcı hiçbir şey
+ * girmez. Yalnızca 'https' sunucularda anlamlı (socks5'te kayıt yok).
+ *
+ * @param {string} lokasyonId
+ * @param {string} cihaz  cihaz kimliği (opak, sunucuya gönderilir)
+ * @returns {string} tam https URL ya da '' (kayıt desteklenmiyorsa)
+ */
+function vpnKayitUrl(lokasyonId, cihaz) {
+  const s = sunucuBul(lokasyonId) || SUNUCULAR[0];
+  if (!s || s.sema !== 'https') return '';
+  return 'https://' + s.host + ':' + s.port + '/kayit?cihaz=' + encodeURIComponent(String(cihaz || ''));
+}
+
+module.exports = { SUNUCULAR, sunucuBul, lokasyonGecerliMi, vpnVekilKurali, katalog, vpnKayitUrl };

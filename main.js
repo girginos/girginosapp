@@ -2,7 +2,7 @@
 
 const {
   app, BrowserWindow, WebContentsView, ipcMain, shell, session,
-  dialog, Menu, clipboard, nativeTheme, protocol, webFrameMain
+  dialog, Menu, clipboard, nativeTheme, protocol, webFrameMain, net
 } = require('electron');
 const path = require('node:path');
 
@@ -40,7 +40,7 @@ const {
 const { SertifikaDeposu } = require('./src/sertifikalar');
 const { silinecekCerezler, cerezSilmeUrl } = require('./src/cerezler');
 const { vekilKurallari, adresGecerliMi, atlamaGecerliMi } = require('./src/vekil');
-const { vpnVekilKurali, lokasyonGecerliMi: vpnLokasyonGecerliMi, katalog: vpnKatalog } = require('./src/vpn');
+const { vpnVekilKurali, lokasyonGecerliMi: vpnLokasyonGecerliMi, katalog: vpnKatalog, vpnKayitUrl } = require('./src/vpn');
 const { ipucuBasliklari } = require('./src/istemci-ipuclari');
 
 /*
@@ -283,7 +283,7 @@ function durumGonder(statikDe = false) {
     veri.diller = dilListesi();
     veri.motorlar = SEARCH_ENGINES;
     veri.izinTurleri = IZIN_TURLERI;
-    veri.vpnKatalog = vpnKatalog();
+    veri.vpnKatalog = yerelVpnKatalog();
   }
   win.webContents.send('durum', veri);
 }
@@ -1514,19 +1514,47 @@ function prosedurelEslesenler(host) {
   }
 }
 
-// Çıkış IP'sini gezinti oturumundan alır (VPN açıksa sunucu IP'si).
-async function vpnCikisIpAl() {
-  try {
-    const y = await ses.fetch('https://api.ipify.org', { cache: 'no-store' });
-    if (!y.ok) return '';
-    return (await y.text()).trim().slice(0, 64);
-  } catch (e) { return ''; }
+/*
+ * Çıkış IP'sini gezinti oturumundan alır (VPN açıksa sunucu IP'si). net.request
+ * kullanılıyor: session.fetch proxy 407'de app 'login' olayını TETİKLEMEZ (o olay
+ * webContents gezinmeleri için), ClientRequest'in kendi 'login' olayı ise
+ * proxy kimlik doğrulamasını yapar — böylece token'lı çıkış gerçekten ölçülür.
+ */
+function vpnCikisIpAl() {
+  return new Promise((coz) => {
+    let bitti = false;
+    const bitir = (v) => { if (!bitti) { bitti = true; coz(v); } };
+    try {
+      const req = net.request({ url: 'https://api.ipify.org', session: ses, useSessionCookies: false });
+      req.on('login', (authInfo, cb) => {
+        if (authInfo.isProxy && store.ayarlar.vpnAcik) cb(cihazKimligi(), store.ayarlar.cihazToken || '');
+        else cb();
+      });
+      req.on('response', (res) => {
+        let veri = '';
+        res.on('data', (d) => { veri += d.toString(); });
+        res.on('end', () => bitir(veri.trim().slice(0, 64)));
+        res.on('error', () => bitir(''));
+      });
+      req.on('error', () => bitir(''));
+      setTimeout(() => bitir(''), 15000); // askıda kalmasın
+      req.end();
+    } catch (e) { bitir(''); }
+  });
+}
+
+/*
+ * Katalog + DİLE GÖRE görünen ad: ülke adı i18n'den gelir ("Almanya #1" /
+ * "Germany #1" ...). Katalogda ad tutulmaz; dil değişince yeniden kurulur.
+ */
+function yerelVpnKatalog() {
+  return vpnKatalog().map((s) => ({ ...s, ad: cev('ulke.' + s.ulke) + (s.no ? ' #' + s.no : '') }));
 }
 
 // VPN açılır kutusu (katman) içeriği: durum + çevrilmiş etiketler + katalog.
 function vpnKatmanIcerik(konum) {
   const a = store.ayarlar;
-  const kat = vpnKatalog();
+  const kat = yerelVpnKatalog();
   const lok = kat.find((s) => s.id === a.vpnLokasyon) || kat[0] || { id: '', ad: '', ulke: '', limitMbps: 100 };
   return {
     tur: 'vpn', yon: 'sag',
@@ -1534,16 +1562,15 @@ function vpnKatmanIcerik(konum) {
     kenar: Math.max(6, Math.round((konum && konum.sagKenar) || 8)),
     genislik: 320,
     acik: !!a.vpnAcik,
-    tokenVar: !!(a.cihazToken && String(a.cihazToken).trim()),
-    token: a.cihazToken || '',   // kullanıcının kendi kimliği; alanına geri yazılır (parola tipi)
     lokasyon: lok,
     katalog: kat,
     metin: {
       baslik: cev('arac.vpn'),
       baglantiAcik: cev('vpn.baglantiAcik'), baglantiKapali: cev('vpn.baglantiKapali'),
-      ac: cev('vpn.ac'), lokasyon: cev('vpn.lokasyon'), token: cev('vpn.token'),
-      tokenYer: cev('vpn.tokenYer'), tokenGerek: cev('vpn.tokenGerek'),
+      baglaniyor: cev('vpn.baglaniyor'),
+      ac: cev('vpn.ac'), lokasyon: cev('vpn.lokasyon'),
       ipBaslik: cev('vpn.ipBaslik'), ipGoster: cev('vpn.ipGoster'), ipHata: cev('vpn.ipHata'),
+      hataKayit: cev('vpn.hataKayit'), otomatik: cev('vpn.otomatik'),
       limit: cev('vpn.limitAciklama', { limit: lok.limitMbps }), kapat: cev('bul.kapat')
     }
   };
@@ -1645,6 +1672,30 @@ async function vekilKararaGore(o, ayar) {
 function cihazKimligi() {
   if (!store.ayarlar.cihazKimlik) store.ayarla('cihazKimlik', 'c-' + require('node:crypto').randomUUID());
   return store.ayarlar.cihazKimlik;
+}
+
+/*
+ * OTOMATİK CİHAZ KAYDI — kullanıcı hiçbir şey girmez. Cihaz kimliğini VPN
+ * sunucusunun /kayit ucuna gönderir, sunucu HMAC ile üretilmiş token'ı döner.
+ * VPN proxy'sine TAKILMAYAN ayrı bir oturumdan gider (VEKIL_OTURUMLARI dışında;
+ * yoksa token'ı almak için token gerekirdi — tavuk-yumurta). Token'ı ayarlara
+ * yazar ve döner; başarısızsa '' (çağıran fail-closed davranır, VPN açılmaz).
+ */
+async function cihazKaydiYap(lokasyonId) {
+  const url = vpnKayitUrl(lokasyonId || store.ayarlar.vpnLokasyon, cihazKimligi());
+  if (!url) return '';
+  try {
+    const o = session.fromPartition('vpn-kayit');   // proxy'siz, kalıcı olmayan
+    const y = await o.fetch(url, { cache: 'no-store' });
+    if (!y.ok) return '';
+    const j = await y.json();
+    const t = j && typeof j.token === 'string' ? j.token.trim() : '';
+    if (t) store.ayarla('cihazToken', t);
+    return t;
+  } catch (e) {
+    console.error('Cihaz kaydı başarısız:', e.message);
+    return '';
+  }
 }
 
 async function vekiliUygula() {
@@ -2075,6 +2126,7 @@ function ipcKur() {
     !!katmanGorunum && !katmanGorunum.webContents.isDestroyed()
     && !!e.senderFrame && e.senderFrame === katmanGorunum.webContents.mainFrame;
   const katmanOn = (kanal, fn) => ipcMain.on(kanal, (e, ...a) => { if (katmandan(e)) fn(e, ...a); });
+  const katmanHandle = (kanal, fn) => ipcMain.handle(kanal, (e, ...a) => (katmandan(e) ? fn(e, ...a) : null));
 
   /*
    * SCRIPTLET EŞLEŞTİRME (SENKRON). Sekme preload'ı her gezinmede bu host'un
@@ -2311,7 +2363,7 @@ function ipcKur() {
   handle('vpn:durum', () => ({
     acik: !!store.ayarlar.vpnAcik,
     lokasyon: store.ayarlar.vpnLokasyon,
-    katalog: vpnKatalog(),
+    katalog: yerelVpnKatalog(),
     tokenVar: !!store.ayarlar.cihazToken,
     reddedildi: vekilReddedildi
   }));
@@ -2384,12 +2436,19 @@ function ipcKur() {
   });
 
   // VPN açılır kutusu eylemleri (katmandan gelir).
-  katmanOn('katman:vpn-ackapa', (_e, deger) => {
+  // Aç/kapa OTOMATİK KAYIT içerir: açarken cihaz token'ı sunucudan alınıyor
+  // (kullanıcı hiçbir şey girmez). invoke: katman sonucu bekleyip UI'yi güncelliyor.
+  katmanHandle('katman:vpn-ackapa', async (_e, deger) => {
+    if (deger) {
+      const t = await cihazKaydiYap();
+      if (!t) return { acik: false, hata: 'kayit' };   // kayıt olamadı -> açma (fail-closed)
+    }
     store.ayarla('vpnAcik', !!deger);
-    vekiliUygula();
+    await vekiliUygula();
     durumGonder();
     const s = aktifSekme();
     if (s && !s.view.webContents.isDestroyed()) s.view.webContents.reload();
+    return { acik: !!store.ayarlar.vpnAcik, hata: '' };
   });
   katmanOn('katman:vpn-lokasyon', (_e, id) => {
     if (!vpnLokasyonGecerliMi(id)) return;
@@ -2397,11 +2456,7 @@ function ipcKur() {
     if (store.ayarlar.vpnAcik) { vekiliUygula(); const s = aktifSekme(); if (s && !s.view.webContents.isDestroyed()) s.view.webContents.reload(); }
     durumGonder();
   });
-  katmanOn('katman:vpn-token', (_e, t) => {
-    store.ayarla('cihazToken', String(t == null ? '' : t).trim().slice(0, 256));
-    durumGonder();
-  });
-  ipcMain.handle('katman:vpn-ip', (e) => (katmandan(e) ? vpnCikisIpAl() : null));
+  katmanHandle('katman:vpn-ip', () => vpnCikisIpAl());
 
   // VPN kutusu: arayüz düğmenin konumunu ölçüp gönderiyor, içerik burada üretiliyor.
   on('vpn:menu', (_e, konum) => {

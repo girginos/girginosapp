@@ -1039,33 +1039,94 @@ svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width:
 .vpn-ip { margin-inline-start: 8px; font-variant-numeric: tabular-nums; }
 
 
-/* VPN açılır kutusu — VeePN tarzı (katman içinde) */
-.vpn-ekran { display: flex; flex-direction: column; align-items: center; gap: 11px; padding: 8px 10px 12px; }
-.vpn-guc { width: 104px; height: 104px; border-radius: 50%; border: none; cursor: pointer; display: grid; place-items: center; color: #fff; box-shadow: var(--golge); transition: transform var(--gecis); margin-top: 4px; }
-.vpn-guc svg { width: 40px; height: 40px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; }
-.vpn-guc.kapali { background: linear-gradient(145deg, #3f83ff, #2867ff); }
-.vpn-guc.acik { background: linear-gradient(145deg, #22c55e, #16a34a); }
-.vpn-guc:hover { transform: translateY(-1px); }
+/* ============ VPN açılır kutusu — VeePN tarzı, duruma göre renk ============
+   Durum rengi tek kaynaktan: kapalı = mavi, açık = yeşil. Tüm bileşenler
+   (halo, düğme, durum noktası, IP, kart vurgusu) bu değişkenlerden besleniyor.
+   Renkler açık/koyu temada da okunur; ışıltılar rgba olduğu için zemine karışır. */
+.vpn-baslik { gap: 6px; }
+.vpn-baslik-ikon { display: inline-flex; color: var(--vurgu); }
+.vpn-baslik-ikon svg { width: 15px; height: 15px; display: block; }
+
+.vpn-ekran {
+  position: relative;
+  display: flex; flex-direction: column; align-items: center;
+  gap: 11px; padding: 10px 12px 14px;
+  --vpn-r: #3f7bff; --vpn-r2: #2b5fe0;
+  --vpn-glow: rgba(63, 123, 255, .30); --vpn-ring: rgba(63, 123, 255, .36);
+}
+.vpn-ekran.acik {
+  --vpn-r: #1fb866; --vpn-r2: #12a457;
+  --vpn-glow: rgba(31, 184, 102, .32); --vpn-ring: rgba(31, 184, 102, .40);
+}
+/* Güç düğmesinin arkasında duruma göre yumuşak ışıltı */
+.vpn-ekran::before {
+  content: ''; position: absolute; top: -8px; left: 50%; transform: translateX(-50%);
+  width: 240px; height: 165px; pointer-events: none; z-index: 0;
+  background: radial-gradient(58% 78% at 50% 0, var(--vpn-glow), transparent 72%);
+}
+.vpn-ekran > * { position: relative; z-index: 1; }
+
+/* Güç düğmesi + nefes alan halo + eş merkezli halkalar */
+.vpn-guc-alan { position: relative; display: grid; place-items: center; width: 100%; padding: 6px 0 2px; }
+.vpn-halo {
+  position: absolute; width: 150px; height: 150px; border-radius: 50%;
+  background: radial-gradient(closest-side, var(--vpn-glow), transparent 70%); opacity: .85;
+}
+.vpn-ekran.acik .vpn-halo { animation: vpn-nefes 2.6s ease-in-out infinite; }
+@keyframes vpn-nefes { 0%, 100% { transform: scale(1); opacity: .8; } 50% { transform: scale(1.09); opacity: 1; } }
+
+.vpn-guc {
+  position: relative; z-index: 1;
+  width: 104px; height: 104px; border-radius: 50%; border: none; cursor: pointer;
+  display: grid; place-items: center; color: #fff;
+  background: linear-gradient(145deg, var(--vpn-r), var(--vpn-r2));
+  box-shadow: 0 12px 26px -6px var(--vpn-ring), inset 0 2px 3px rgba(255, 255, 255, .38), inset 0 -3px 7px rgba(0, 0, 0, .16);
+  transition: transform var(--gecis), box-shadow var(--gecis);
+}
+.vpn-guc::before, .vpn-guc::after { content: ''; position: absolute; border-radius: 50%; pointer-events: none; border: 1px solid var(--vpn-ring); }
+.vpn-guc::before { inset: -8px; opacity: .7; }
+.vpn-guc::after { inset: -16px; opacity: .32; }
+.vpn-guc svg { width: 40px; height: 40px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .2)); }
+.vpn-guc:hover { transform: translateY(-1px); box-shadow: 0 16px 32px -6px var(--vpn-ring), inset 0 2px 3px rgba(255, 255, 255, .42), inset 0 -3px 7px rgba(0, 0, 0, .16); }
 .vpn-guc:active { transform: scale(.97); }
-.vpn-guc:disabled { opacity: .7; cursor: default; }
-.vpn-durum-metin { font-weight: 700; font-size: 15px; letter-spacing: .3px; margin-top: 2px; }
-.vpn-kart { width: 100%; box-sizing: border-box; background: var(--kart); border: 1px solid var(--cizgi); border-radius: 12px; padding: 12px 14px; display: flex; align-items: center; gap: 12px; }
-.vpn-lokasyon-kart { cursor: pointer; text-align: start; }
-.vpn-lokasyon-kart:hover { border-color: var(--cizgi-guclu); }
-.vpn-bayrak { font-size: 26px; line-height: 1; }
-.vpn-lok-ad { display: flex; flex-direction: column; flex: 1; }
-.vpn-lok-ad b { font-size: 15px; }
-.vpn-lok-ad small { color: var(--metin2); }
-.vpn-ok { color: var(--metin2); font-size: 22px; }
+.vpn-guc:disabled { cursor: default; }
+.vpn-guc.mesgul { animation: vpn-nabiz 1s ease-in-out infinite; }
+@keyframes vpn-nabiz { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
+@media (prefers-reduced-motion: reduce) {
+  .vpn-guc.mesgul { animation: none; opacity: .75; }
+  .vpn-ekran.acik .vpn-halo { animation: none; }
+}
+
+/* Durum metni: renk + öncesinde ışıltılı nokta */
+.vpn-durum-metin { display: flex; align-items: center; gap: 7px; font-weight: 700; font-size: 15px; letter-spacing: .2px; margin-top: 2px; color: var(--metin); }
+.vpn-durum-metin::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--vpn-r); box-shadow: 0 0 0 3px var(--vpn-glow); }
+.vpn-ekran.acik .vpn-durum-metin { color: var(--vpn-r); }
+
+/* Kartlar */
+.vpn-kart { width: 100%; box-sizing: border-box; background: var(--kart); border: 1px solid var(--cizgi); border-radius: 13px; padding: 11px 13px; display: flex; align-items: center; gap: 12px; transition: border-color var(--gecis), box-shadow var(--gecis); }
+/* Buton color'ı MİRAS ALMAZ (buttontext varsayılanı): koyu temada "Almanya"
+   siyah kalıyordu. Metin rengi açıkça temadan geliyor -> koyuda beyaz. */
+.vpn-lokasyon-kart { cursor: pointer; text-align: start; font: inherit; color: var(--metin); }
+.vpn-lokasyon-kart:hover { border-color: var(--vpn-ring); box-shadow: 0 6px 16px -10px var(--vpn-ring); }
+/* Yuvarlak bayrak rozeti (circle-flags: SVG kendinden dairesel maskeli) */
+.vpn-bayrak { flex: 0 0 32px; width: 32px; height: 32px; border-radius: 50%; overflow: hidden; box-shadow: 0 0 0 1px rgba(0, 0, 0, .14), 0 1px 3px rgba(0, 0, 0, .18); }
+.vpn-bayrak svg { display: block; width: 100%; height: 100%; }
+.vpn-lok-ad { display: flex; flex-direction: column; flex: 1; line-height: 1.25; }
+.vpn-lok-ad b { font-size: 14.5px; }
+.vpn-lok-ad small { color: var(--metin2); font-size: 11.5px; letter-spacing: .3px; }
+.vpn-ok { color: var(--metin2); font-size: 20px; transition: transform var(--gecis); }
+.vpn-lokasyon-kart:hover .vpn-ok { transform: translateX(2px); }
 .vpn-ip-kart { justify-content: space-between; }
-.vpn-ip-deger { font-variant-numeric: tabular-nums; }
-.vpn-token-kart { flex-direction: column; align-items: stretch; gap: 7px; }
-.vpn-token-kart.gerekli { border-color: var(--vurgu); box-shadow: 0 0 0 2px var(--vurgu-yumusak); }
-.vpn-token-baslik { font-weight: 600; font-size: 13px; color: var(--metin2); }
-.vpn-token-girdi { width: 100%; box-sizing: border-box; height: 32px; padding: 0 10px; border: 1px solid var(--cizgi); border-radius: 8px; background: var(--zemin); color: var(--metin); font: inherit; font-size: 13px; }
-.vpn-token-girdi:focus-visible { outline: none; border-color: var(--vurgu); }
-.vpn-uyari:empty { display: none; }
-.vpn-uyari { color: var(--tehlike); font-size: 12px; }
+.vpn-ip-kart > span { font-size: 13px; color: var(--metin2); }
+.vpn-ip-deger { font-variant-numeric: tabular-nums; color: var(--metin); font-size: 13.5px; margin-left: 3px; }
+.vpn-ekran.acik .vpn-ip-deger { color: var(--vpn-r); }
 .vpn-ip-kart .dugme { flex: 0 0 auto; }
+
+/* Uyarı + alt notlar + gizli seçici */
+.vpn-uyari { color: var(--tehlike); font-size: 12px; }
+.vpn-uyari:empty { display: none; }
 .vpn-gizli-sec { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
-.vpn-limit { color: var(--metin2); font-size: 12px; text-align: center; }
+.vpn-limit { color: var(--metin2); font-size: 11.5px; text-align: center; }
+.vpn-oto { display: flex; align-items: center; justify-content: center; gap: 5px; color: var(--metin2); font-size: 11.5px; text-align: center; opacity: .9; }
+.vpn-oto::before { content: ''; width: 12px; height: 12px; background: currentColor; -webkit-mask: var(--vpn-kilit) center/contain no-repeat; mask: var(--vpn-kilit) center/contain no-repeat; opacity: .8; }
+:root { --vpn-kilit: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23000' d='M12 1a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-9a2 2 0 0 0-2-2h-1V6a5 5 0 0 0-5-5zm3 8H9V6a3 3 0 0 1 6 0v3z'/%3E%3C/svg%3E"); }

@@ -153,79 +153,103 @@ function izinCiz(v) {
 
 /* ---------------- VPN ---------------- */
 
-// Ülke kodundan bayrak emojisi (bölgesel gösterge harfleri). Windows'ta bayrak
-// yazıtipi yoksa iki harfli kod görünür — kabul edilebilir.
-function bayrakEmoji(ulke) {
-  if (!ulke || ulke.length !== 2) return '🌐';
-  return [...ulke.toUpperCase()].map((c) => String.fromCodePoint(0x1F1E6 + c.charCodeAt(0) - 65)).join('');
+/*
+ * Ülke bayrağı — HatScripts/circle-flags setinden gömülü (MIT lisansı),
+ * kendinden dairesel maskeli profesyonel SVG'ler. Emoji bayrak yazıtipi
+ * Windows'ta yok; bu yüzden gerçek çizim. mask id'leri ülkeye özel: aynı
+ * belgede iki bayrak olursa çakışmasın. Bilinmeyen ülke için küre.
+ */
+function bayrakSvg(ulke) {
+  const S = (id, ic) => '<svg viewBox="0 0 512 512" aria-hidden="true"><mask id="bm-' + id + '">'
+    + '<circle cx="256" cy="256" r="256" fill="#fff"/></mask><g mask="url(#bm-' + id + ')">' + ic + '</g></svg>';
+  const B = {
+    DE: S('de', '<path fill="#ffda44" d="m0 345 256.7-25.5L512 345v167H0z"/><path fill="#d80027" d="m0 167 255-23 257 23v178H0z"/><path fill="#333" d="M0 0h512v167H0z"/>'),
+    NL: S('nl', '<path fill="#eee" d="m0 167 253.8-19.3L512 167v178l-254.9 32.3L0 345z"/><path fill="#a2001d" d="M0 0h512v167H0z"/><path fill="#0052b4" d="M0 345h512v167H0z"/>'),
+    FR: S('fr', '<path fill="#eee" d="M167 0h178l25.9 252.3L345 512H167l-29.8-253.4z"/><path fill="#0052b4" d="M0 0h167v512H0z"/><path fill="#d80027" d="M345 0h167v512H345z"/>'),
+    TR: S('tr', '<path fill="#d80027" d="M0 0h512v512H0z"/><path fill="#eee" d="M208 115a141 141 0 1 0 106 242q-25 13-54 13a114 114 0 1 1 54-215 141 141 0 0 0-106-40m142 67v56l-54 18 54 17v57l33-46 54 18-33-46 33-46-54 18z"/>'),
+    US: S('us', '<path fill="#eee" d="M256 0h256v64l-32 32 32 32v64l-32 32 32 32v64l-32 32 32 32v64l-256 32L0 448v-64l32-32-32-32v-64z"/><path fill="#d80027" d="M224 64h288v64H224Zm0 128h288v64H256ZM0 320h512v64H0Zm0 128h512v64H0Z"/><path fill="#0052b4" d="M0 0h256v256H0Z"/><path fill="#eee" d="m187 243 57-41h-70l57 41-22-67zm-81 0 57-41H93l57 41-22-67zm-81 0 57-41H12l57 41-22-67zm162-81 57-41h-70l57 41-22-67zm-81 0 57-41H93l57 41-22-67zm-81 0 57-41H12l57 41-22-67Zm162-82 57-41h-70l57 41-22-67Zm-81 0 57-41H93l57 41-22-67zm-81 0 57-41H12l57 41-22-67Z"/>'),
+    GB: S('gb', '<path fill="#eee" d="m0 0 8 22-8 23v23l32 54-32 54v32l32 48-32 48v32l32 54-32 54v68l22-8 23 8h23l54-32 54 32h32l48-32 48 32h32l54-32 54 32h68l-8-22 8-23v-23l-32-54 32-54v-32l-32-48 32-48v-32l-32-54 32-54V0l-22 8-23-8h-23l-54 32-54-32h-32l-48 32-48-32h-32l-54 32L68 0H0z"/><path fill="#0052b4" d="M336 0v108L444 0Zm176 68L404 176h108zM0 176h108L0 68ZM68 0l108 108V0Zm108 512V404L68 512ZM0 444l108-108H0Zm512-108H404l108 108Zm-68 176L336 404v108z"/><path fill="#d80027" d="M0 0v45l131 131h45L0 0zm208 0v208H0v96h208v208h96V304h208v-96H304V0h-96zm259 0L336 131v45L512 0h-45zM176 336 0 512h45l131-131v-45zm160 0 176 176v-45L381 336h-45z"/>')
+  };
+  const svg = B[(ulke || '').toUpperCase()];
+  if (svg) return svg;
+  return '<svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="8" fill="none" stroke="currentColor" stroke-width="1.3"/>'
+    + '<path d="M2 10h16M10 2v16M4.4 5c3.2 2.6 8 2.6 11.2 0M4.4 15c3.2-2.6 8-2.6 11.2 0" fill="none" stroke="currentColor" stroke-width="1.05"/></svg>';
 }
 
 const VPN_GUC_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true">'
   + '<path d="M12 2.5v9"/><path d="M6.6 6.6a8 8 0 1 0 10.8 0"/></svg>';
 
+// Başlıktaki kalkan (onaylı) ikonu — pencereye VPN kimliği katar.
+const VPN_KALKAN_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true">'
+  + '<path d="M12 3l7 3v5c0 4.4-3 8-7 10-4-2-7-5.6-7-10V6l7-3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>'
+  + '<path d="M9 12l2 2 4-4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
 /*
  * VPN açılır kutusu (VeePN tarzı): büyük güç düğmesi + bağlantı durumu +
- * bayraklı konum kartı + çıkış IP + cihaz token'ı. Aç/kapa ve lokasyon
- * değişince kutu yerinde yeniden çizilir (iyimser); asıl durumu ana süreç
- * saklar. Bant limiti (100 Mbps/kullanıcı) SUNUCUDA uygulanır.
+ * bayraklı konum kartı + çıkış IP. KİMLİK DOĞRULAMA OTOMATİK: kullanıcı token
+ * girmez; güç düğmesine basınca ana süreç cihaz token'ını sunucudan alır
+ * (vpnAcKapa invoke -> {acik,hata}). Bant limiti (100 Mbps/kullanıcı) SUNUCUDA.
+ * Aç/kapa ve lokasyon değişince kutu yerinde yeniden çizilir; durum v üstünde.
  */
 function vpnCiz(v) {
   kutu.replaceChildren();          // yeniden çizimde eski içerik gitsin; konum sınıfları/var'ları kalır
   const m = v.metin;
   const bagli = !!v.acik;
 
-  // Başlık + kapat
+  // Başlık: kalkan ikonu + "VPN" + kapat
   const baslik = document.createElement('div');
-  baslik.className = 'menu-baslik';
-  baslik.textContent = m.baslik;
+  baslik.className = 'menu-baslik vpn-baslik';
+  const kalkan = document.createElement('span');
+  kalkan.className = 'vpn-baslik-ikon';
+  kalkan.innerHTML = VPN_KALKAN_SVG;
+  const baslikAd = document.createElement('span');
+  baslikAd.textContent = m.baslik;
   const kapat = document.createElement('button');
   kapat.className = 'ikon kucuk';
   kapat.innerHTML = SIMGE.kapat;
   kapat.title = m.kapat || '';
   kapat.addEventListener('click', () => window.katman.kapat());
-  baslik.appendChild(kapat);
+  baslik.append(kalkan, baslikAd, kapat);
   kutu.appendChild(baslik);
 
   const ekran = document.createElement('div');
-  ekran.className = 'vpn-ekran';
+  ekran.className = 'vpn-ekran ' + (bagli ? 'acik' : 'kapali');
 
-  // Token kartı (güç düğmesi buna bakıyor; önce kur)
-  const tokKart = document.createElement('div');
-  tokKart.className = 'vpn-kart vpn-token-kart' + (v.tokenVar ? '' : ' gerekli');
-  const tokBaslik = document.createElement('div');
-  tokBaslik.className = 'vpn-token-baslik';
-  tokBaslik.textContent = m.token;
-  const tok = document.createElement('input');
-  tok.type = 'password'; tok.value = v.token || ''; tok.placeholder = m.tokenYer;
-  tok.autocomplete = 'off'; tok.spellcheck = false; tok.className = 'vpn-token-girdi';
-  const tokUyari = document.createElement('div');
-  tokUyari.className = 'vpn-uyari';
-  tok.addEventListener('change', () => {
-    const t = tok.value.trim();
-    v.tokenVar = !!t;
-    tokKart.classList.toggle('gerekli', !t);
-    tokUyari.textContent = '';
-    window.katman.vpnToken(t);
-  });
-  tokKart.append(tokBaslik, tok, tokUyari);
-
-  // Güç düğmesi
+  // Güç düğmesi (halo + halkalarla) — otomatik kayıt: sonucu bekler,
+  // bu sırada "Bağlanıyor…" gösterir.
+  const gucAlan = document.createElement('div');
+  gucAlan.className = 'vpn-guc-alan';
+  const halo = document.createElement('div');
+  halo.className = 'vpn-halo';
   const guc = document.createElement('button');
   guc.className = 'vpn-guc ' + (bagli ? 'acik' : 'kapali');
   guc.setAttribute('aria-pressed', bagli ? 'true' : 'false');
   guc.setAttribute('aria-label', m.ac);
   guc.innerHTML = VPN_GUC_SVG;
-  guc.addEventListener('click', () => {
-    if (!bagli && !v.tokenVar) { tokUyari.textContent = m.tokenGerek; tok.focus(); return; }
-    v.acik = !bagli;
-    window.katman.vpnAcKapa(v.acik);
-    vpnCiz(v);                     // iyimser yeniden çizim
-  });
+  gucAlan.append(halo, guc);
 
   const durumMetin = document.createElement('div');
   durumMetin.className = 'vpn-durum-metin';
   durumMetin.textContent = bagli ? m.baglantiAcik : m.baglantiKapali;
-  ekran.append(guc, durumMetin);
+
+  const hata = document.createElement('div');
+  hata.className = 'vpn-uyari';
+  if (v.hata) hata.textContent = v.hata;
+
+  guc.addEventListener('click', async () => {
+    const hedef = !bagli;
+    guc.disabled = true;
+    guc.classList.add('mesgul');
+    durumMetin.textContent = m.baglaniyor;
+    hata.textContent = '';
+    let sonuc = null;
+    try { sonuc = await window.katman.vpnAcKapa(hedef); } catch (e) { /* sonuc null */ }
+    if (!hedef) { v.acik = false; v.hata = ''; }                 // kapatma her zaman başarılı
+    else if (sonuc && sonuc.acik && !sonuc.hata) { v.acik = true; v.hata = ''; }
+    else { v.acik = false; v.hata = m.hataKayit; }               // kayıt/bağlantı olamadı
+    vpnCiz(v);
+  });
+  ekran.append(gucAlan, durumMetin, hata);
 
   // Konum kartı (bayrak + ad; tıkla → gizli seçici)
   const sec = document.createElement('select');
@@ -246,7 +270,7 @@ function vpnCiz(v) {
   lokKart.className = 'vpn-kart vpn-lokasyon-kart';
   const bayrak = document.createElement('span');
   bayrak.className = 'vpn-bayrak';
-  bayrak.textContent = bayrakEmoji(v.lokasyon.ulke);
+  bayrak.innerHTML = bayrakSvg(v.lokasyon.ulke);
   const lokAd = document.createElement('span');
   lokAd.className = 'vpn-lok-ad';
   const lokB = document.createElement('b'); lokB.textContent = v.lokasyon.ad || '';
@@ -276,12 +300,14 @@ function vpnCiz(v) {
   ipKart.append(ipMetin, ipBtn);
   ekran.appendChild(ipKart);
 
-  // Token kartı + limit açıklaması
-  ekran.appendChild(tokKart);
+  // Otomatik-bağlantı notu (kullanıcı giriş yapmaz) + limit açıklaması
+  const oto = document.createElement('div');
+  oto.className = 'vpn-oto';
+  oto.textContent = m.otomatik;
   const limit = document.createElement('div');
   limit.className = 'vpn-limit';
   limit.textContent = m.limit;
-  ekran.appendChild(limit);
+  ekran.append(oto, limit);
 
   kutu.appendChild(ekran);
 }

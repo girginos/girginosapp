@@ -2,15 +2,26 @@
 //
 // TLS'li HTTP forward proxy (CONNECT + düz HTTP). Chromium'da "https proxy"
 // olarak kullanılır: tarayıcı<->sunucu TLS ile ŞİFRELİ. Let's Encrypt sertifikası
-// autocert ile otomatik (TLS-ALPN-01, :443). Cihaz token'ı ile kimlik doğrulama
-// (Proxy-Authorization: Basic). Her token'a 100 Mbps üst sınır (o token'ın TÜM
-// bağlantıları paylaşır -> "ne olursa olsun aşamasın"). Limit SUNUCUDA; açık
-// kaynak istemci limiti sökemez.
+// autocert ile otomatik (TLS-ALPN-01, :443). Her token'a 100 Mbps üst sınır (o
+// token'ın TÜM bağlantıları paylaşır -> "ne olursa olsun aşamasın"). Limit
+// SUNUCUDA; açık kaynak istemci limiti sökemez.
+//
+// KİMLİK DOĞRULAMA — OTOMATİK, KULLANICI GİRİŞSİZ:
+// Kullanıcı token yazmaz. İstemci cihaz kimliğini `/kayit` uç noktasına gönderir,
+// sunucu gizli anahtarla token = base64url(HMAC-SHA256(secret, cihaz)) üretip
+// döner. Proxy kimlik doğrulaması `Proxy-Authorization: Basic base64(cihaz:token)`
+// ve sunucu HMAC'i yeniden hesaplayıp karşılaştırır (DURUMSUZ: token dosyası yok).
+// Her cihaz = ayrı token = ayrı 100 Mbps kovası. Kayıt açık (kimliksiz); kötüye
+// kullanım denetimi ileride (limit yine token başına korur).
 package main
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
+	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -30,54 +41,75 @@ const (
 	domain     = "de-browservpn.girginos.app"
 	limitBytes = 12_500_000 // 100 Mbps = 100e6 bit/s ≈ 12.5 MB/s
 	certDir    = "/etc/browservpn/cert"
-	tokenFile  = "/etc/browservpn/tokens"
+	secretFile = "/etc/browservpn/secret" // gizli HMAC anahtarı (openssl rand -hex 32)
 )
 
 var (
-	tokensMu sync.RWMutex
-	tokens   = map[string]bool{}
+	secretMu sync.RWMutex
+	secret   []byte
+
 	limMu    sync.Mutex
 	limiters = map[string]*rate.Limiter{}
 )
 
-func loadTokens() {
-	data, err := os.ReadFile(tokenFile)
+// Gizli anahtarı diskten yükler. Yoksa/çok kısaysa süreç durur: anahtarsız
+// çalışmak tüm token'ları geçersiz kılar (sessizce açık proxy olmaktansa hata).
+func loadSecret() {
+	data, err := os.ReadFile(secretFile)
 	if err != nil {
-		log.Printf("UYARI token dosyası okunamadı (%s): %v", tokenFile, err)
-		return
+		log.Fatalf("secret okunamadı (%s): %v — 'openssl rand -hex 32 > %s' ile üretin", secretFile, err, secretFile)
 	}
-	m := map[string]bool{}
-	for _, line := range strings.Split(string(data), "\n") {
-		t := strings.TrimSpace(line)
-		if t != "" && !strings.HasPrefix(t, "#") {
-			m[t] = true
-		}
+	s := strings.TrimSpace(string(data))
+	if len(s) < 16 {
+		log.Fatalf("secret çok kısa (%d bayt); en az 16", len(s))
 	}
-	tokensMu.Lock()
-	tokens = m
-	tokensMu.Unlock()
-	log.Printf("%d token yüklendi", len(m))
+	secretMu.Lock()
+	secret = []byte(s)
+	secretMu.Unlock()
+	log.Printf("secret yüklendi (%d bayt)", len(s))
 }
 
-func tokenOK(t string) bool {
-	tokensMu.RLock()
-	defer tokensMu.RUnlock()
-	// sabit-zaman değil ama token yüksek entropili; map araması yeterli.
-	for k := range tokens {
-		if subtle.ConstantTimeCompare([]byte(k), []byte(t)) == 1 {
-			return true
-		}
-	}
-	return false
+// token = base64url(HMAC-SHA256(secret, cihaz)). Cihaz kimliği opak bir dizedir.
+func hmacToken(cihaz string) string {
+	secretMu.RLock()
+	key := secret
+	secretMu.RUnlock()
+	mac := hmac.New(sha256.New, key)
+	mac.Write([]byte(cihaz))
+	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
 }
 
-func limiterFor(t string) *rate.Limiter {
+// Cihaz kimliği kabul edilebilir mi? (aşırı/boş girdiyi ele)
+func gecerliCihaz(cihaz string) bool {
+	if len(cihaz) < 8 || len(cihaz) > 200 {
+		return false
+	}
+	for _, r := range cihaz {
+		ok := r == '-' || r == '_' || r == '.' ||
+			(r >= '0' && r <= '9') || (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z')
+		if !ok {
+			return false
+		}
+	}
+	return true
+}
+
+// Kimlik doğrulama: token, cihaz için beklenen HMAC'e sabit-zaman eşit mi?
+func kimlikDogrula(cihaz, token string) bool {
+	if !gecerliCihaz(cihaz) || token == "" {
+		return false
+	}
+	beklenen := hmacToken(cihaz)
+	return subtle.ConstantTimeCompare([]byte(beklenen), []byte(token)) == 1
+}
+
+func limiterFor(anahtar string) *rate.Limiter {
 	limMu.Lock()
 	defer limMu.Unlock()
-	l := limiters[t]
+	l := limiters[anahtar]
 	if l == nil {
 		l = rate.NewLimiter(rate.Limit(limitBytes), limitBytes)
-		limiters[t] = l
+		limiters[anahtar] = l
 	}
 	return l
 }
@@ -103,20 +135,20 @@ func limitedCopy(dst io.Writer, src io.Reader, l *rate.Limiter) {
 	}
 }
 
-func parseProxyAuth(h string) (pass string, ok bool) {
+func parseProxyAuth(h string) (cihaz, token string, ok bool) {
 	const p = "Basic "
 	if !strings.HasPrefix(h, p) {
-		return "", false
+		return "", "", false
 	}
 	dec, err := base64.StdEncoding.DecodeString(strings.TrimSpace(h[len(p):]))
 	if err != nil {
-		return "", false
+		return "", "", false
 	}
 	i := strings.IndexByte(string(dec), ':')
 	if i < 0 {
-		return "", false
+		return "", "", false
 	}
-	return string(dec[i+1:]), true // kullanıcı = cihaz kimliği (yok sayılıyor), parola = token
+	return string(dec[:i]), string(dec[i+1:]), true // kullanıcı = cihaz kimliği, parola = token
 }
 
 var hopHeaders = []string{"Proxy-Authorization", "Proxy-Connection", "Connection", "Keep-Alive", "Te", "Trailer", "Transfer-Encoding", "Upgrade"}
@@ -127,14 +159,40 @@ func stripHop(h http.Header) {
 	}
 }
 
+// Cihaz kaydı: kimliğe karşılık gelen HMAC token'ı döner. Kullanıcı girişsiz.
+func handleKayit(w http.ResponseWriter, r *http.Request) {
+	cihaz := r.URL.Query().Get("cihaz")
+	if !gecerliCihaz(cihaz) {
+		http.Error(w, "gecersiz cihaz", http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	_ = json.NewEncoder(w).Encode(map[string]string{"token": hmacToken(cihaz)})
+}
+
 func handler(w http.ResponseWriter, r *http.Request) {
-	pass, ok := parseProxyAuth(r.Header.Get("Proxy-Authorization"))
-	if !ok || !tokenOK(pass) {
+	// Doğrudan (proxy olmayan) istekler origin-form gelir: kayıt / sağlık.
+	// Proxy istekleri absolute-form (düz HTTP) ya da CONNECT'tir.
+	if r.Method != http.MethodConnect && !r.URL.IsAbs() {
+		switch r.URL.Path {
+		case "/kayit":
+			handleKayit(w, r)
+		case "/saglik":
+			fmt.Fprint(w, "ok")
+		default:
+			http.NotFound(w, r)
+		}
+		return
+	}
+
+	cihaz, token, ok := parseProxyAuth(r.Header.Get("Proxy-Authorization"))
+	if !ok || !kimlikDogrula(cihaz, token) {
 		w.Header().Set("Proxy-Authenticate", `Basic realm="browservpn"`)
 		http.Error(w, "proxy authentication required", http.StatusProxyAuthRequired)
 		return
 	}
-	lim := limiterFor(pass)
+	lim := limiterFor(cihaz) // kova cihaz başına
 	if r.Method == http.MethodConnect {
 		handleConnect(w, r, lim)
 		return
@@ -189,13 +247,13 @@ func handleHTTP(w http.ResponseWriter, r *http.Request, lim *rate.Limiter) {
 }
 
 func main() {
-	loadTokens()
-	// SIGHUP: token dosyasını yeniden yükle (yeni cihaz eklenince restart gerekmesin).
+	loadSecret()
+	// SIGHUP: gizli anahtarı yeniden yükle (döndürülürse restart gerekmesin).
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGHUP)
 	go func() {
 		for range sig {
-			loadTokens()
+			loadSecret()
 		}
 	}()
 
@@ -215,6 +273,6 @@ func main() {
 		ReadTimeout:  0,
 		WriteTimeout: 0,
 	}
-	log.Printf("browservpn :443 dinliyor (domain %s, limit 100 Mbps/token)", domain)
+	log.Printf("browservpn :443 dinliyor (domain %s, otomatik HMAC token, limit 100 Mbps/cihaz)", domain)
 	log.Fatal(srv.ListenAndServeTLS("", ""))
 }
