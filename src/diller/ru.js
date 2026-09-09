@@ -325,6 +325,7 @@ module.exports = {
     'hata.bilinmeyen.metin': 'При загрузке страницы произошла неизвестная ошибка.',
     'yenisekme.ara': 'Поиск',
     'yenisekme.sik': 'Часто посещаемые',
+    'yenisekme.sikKaldir': 'Remove from frequently visited',
     'yenisekme.oneCikan': 'Рекомендуем',
     'yenisekme.kisayolEkle': '+ Добавить ярлык',
     'yenisekme.kisayolIpucu': 'primer.ru — нажмите Enter, чтобы добавить',

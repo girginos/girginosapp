@@ -325,6 +325,7 @@ module.exports = {
     'hata.bilinmeyen.metin': '加载页面时发生未知问题。',
     'yenisekme.ara': '搜索',
     'yenisekme.sik': '常去网站',
+    'yenisekme.sikKaldir': 'Remove from frequently visited',
     'yenisekme.oneCikan': '精选',
     'yenisekme.kisayolEkle': '+ 添加快捷方式',
     'yenisekme.kisayolIpucu': 'example.com — 按 Enter 添加',

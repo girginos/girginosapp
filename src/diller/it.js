@@ -325,6 +325,7 @@ module.exports = {
     'hata.bilinmeyen.metin': 'Si è verificato un problema sconosciuto durante il caricamento.',
     'yenisekme.ara': 'Cerca',
     'yenisekme.sik': 'Siti frequenti',
+    'yenisekme.sikKaldir': 'Remove from frequently visited',
     'yenisekme.oneCikan': 'In evidenza',
     'yenisekme.kisayolEkle': '+ Aggiungi scorciatoia',
     'yenisekme.kisayolIpucu': 'esempio.it — premi Invio per aggiungere',

@@ -119,11 +119,26 @@ function simgeYap(host, favicon) {
   return i;
 }
 
-function kutucukYap({ url, ad, alt, favicon, silGeriCagirim }) {
+/* Sağ tıkla kaldırma: kullanıcının sildiği hostlar localStorage'da tutulur
+   (sayfa ana süreçle konuşamaz); ana süreç 16 aday yollar, biz 8 gösteririz. */
+const SIK_LIMIT = 8;
+function gizliHostlariOku() {
+  try { const d = JSON.parse(localStorage.getItem('pusula-gizli-hostlar') || '[]'); return Array.isArray(d) ? d : []; } catch { return []; }
+}
+function hostuGizle(host) {
+  const l = gizliHostlariOku();
+  if (!l.includes(host)) l.push(host);
+  try { localStorage.setItem('pusula-gizli-hostlar', JSON.stringify(l.slice(-200))); } catch { /* özel mod */ }
+}
+
+function kutucukYap({ url, ad, alt, favicon, silGeriCagirim, silMetni }) {
   const a = document.createElement('a');
   a.className = 'kutucuk';
   a.href = url;
   a.title = url;
+  // Sağ tık menüsü bu bilgiyi kullanır.
+  a._sil = silGeriCagirim || null;
+  a._silMetni = silMetni || m('kaldir', 'Kaldır');
 
   const host = alanAdi(url) || url;
   a.appendChild(simgeYap(host, favicon));
@@ -144,7 +159,7 @@ function kutucukYap({ url, ad, alt, favicon, silGeriCagirim }) {
     s.className = 'sil';
     s.type = 'button';
     s.textContent = '×';
-    s.title = m('kaldir', 'Kaldır');
+    s.title = a._silMetni;
     s.addEventListener('click', (e) => { e.preventDefault(); e.stopPropagation(); silGeriCagirim(); });
     a.appendChild(s);
   }
@@ -169,14 +184,22 @@ function ciz() {
     }));
   }
 
+  // Kullanıcının kaldırdığı hostlar (sağ tık / ×) elenir; ana süreç 16 aday
+  // yolladığı için kaldırılanın yerine sıradaki gelir, boşluk kalmaz.
+  const gizli = new Set(gizliHostlariOku());
+  let gosterilen = 0;
   for (const s of sonlar) {
-    if (gorulen.has(s.host)) continue;
+    if (gosterilen >= SIK_LIMIT) break;
+    if (gorulen.has(s.host) || gizli.has(s.host)) continue;
     gorulen.add(s.host);
+    gosterilen++;
     kap.appendChild(kutucukYap({
       url: s.url,
       ad: kisaAd(s.baslik, s.host),
       alt: s.host,
-      favicon: s.favicon || ''
+      favicon: s.favicon || '',
+      silGeriCagirim: () => { hostuGizle(s.host); ciz(); },
+      silMetni: m('sikKaldir', 'Sık gidilenlerden kaldır')
     }));
   }
 
@@ -254,6 +277,38 @@ function duyurulariCiz() {
 /* ---- alt bilgi ---- */
 
 document.getElementById('alt').textContent = m('alt', '');
+
+/* ---- sağ tık menüsü (kutucuk kaldır) ---- */
+
+let acikMenu = null;
+function menuKapat() { if (acikMenu) { acikMenu.remove(); acikMenu = null; } }
+
+document.addEventListener('contextmenu', (e) => {
+  const kutucuk = e.target.closest && e.target.closest('.kutucuk');
+  if (!kutucuk || !kutucuk._sil) return;   // sadece kaldırılabilir kutucuklarda
+  e.preventDefault();
+  menuKapat();
+  const menu = document.createElement('div');
+  menu.className = 'menu';
+  menu.setAttribute('role', 'menu');
+  const oge = document.createElement('button');
+  oge.type = 'button';
+  oge.className = 'menu-oge';
+  oge.setAttribute('role', 'menuitem');
+  oge.textContent = kutucuk._silMetni;
+  oge.addEventListener('click', () => { menuKapat(); kutucuk._sil(); });
+  menu.appendChild(oge);
+  document.body.appendChild(menu);
+  // Ekranın dışına taşmasın.
+  const mw = menu.offsetWidth, mh = menu.offsetHeight;
+  menu.style.left = Math.min(e.clientX, innerWidth - mw - 8) + 'px';
+  menu.style.top = Math.min(e.clientY, innerHeight - mh - 8) + 'px';
+  acikMenu = menu;
+  oge.focus();
+});
+document.addEventListener('mousedown', (e) => { if (acikMenu && !acikMenu.contains(e.target)) menuKapat(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') menuKapat(); });
+window.addEventListener('blur', menuKapat);
 
 ciz();
 duyurulariCiz();

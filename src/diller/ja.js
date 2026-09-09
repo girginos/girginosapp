@@ -325,6 +325,7 @@ module.exports = {
     'hata.bilinmeyen.metin': 'ページの読み込み中に不明な問題が発生しました。',
     'yenisekme.ara': '検索',
     'yenisekme.sik': 'よく見るサイト',
+    'yenisekme.sikKaldir': 'Remove from frequently visited',
     'yenisekme.oneCikan': 'おすすめ',
     'yenisekme.kisayolEkle': '+ ショートカットを追加',
     'yenisekme.kisayolIpucu': 'example.com — Enter で追加',

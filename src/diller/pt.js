@@ -325,6 +325,7 @@ module.exports = {
     'hata.bilinmeyen.metin': 'Ocorreu um problema desconhecido ao carregar a página.',
     'yenisekme.ara': 'Pesquisar',
     'yenisekme.sik': 'Sites frequentes',
+    'yenisekme.sikKaldir': 'Remove from frequently visited',
     'yenisekme.oneCikan': 'Em destaque',
     'yenisekme.kisayolEkle': '+ Adicionar atalho',
     'yenisekme.kisayolIpucu': 'exemplo.com — pressione Enter para adicionar',

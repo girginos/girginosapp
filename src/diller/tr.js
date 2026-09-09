@@ -338,6 +338,7 @@ module.exports = {
     'hata.bilinmeyen.metin': 'Sayfa yüklenirken bilinmeyen bir sorun oluştu.',
     'yenisekme.ara': 'Ara',
     'yenisekme.sik': 'Sık gidilenler',
+    'yenisekme.sikKaldir': 'Sık gidilenlerden kaldır',
     'yenisekme.oneCikan': 'Öne çıkan',
     'yenisekme.kisayolEkle': '+ Kısayol ekle',
     'yenisekme.kisayolIpucu': 'ornek.com — eklemek için Enter',

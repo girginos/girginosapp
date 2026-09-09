@@ -285,6 +285,38 @@ esit('her kayıt geçerli alan adı biçiminde', LISTE.filter(d => !ALAN_BICIMI.
   try { require('node:fs').unlinkSync(yol); } catch { /* olsun */ }
 }
 
+/* ---- sık gidilenler: gerçekten en çok ziyaret edilenler mi? ---- */
+{
+  const { Store } = require('../src/store');
+  const os = require('node:os');
+  const yol = require('node:path').join(os.tmpdir(), 'sik-deneme-' + process.pid + '.json');
+  const d = new Store(yol);
+  const z = (n) => ({ zaman: 1000 + n });
+  // a: 3 ziyaret (www ve www'suz aynı host sayılmalı), b: 2, c: 1 ama EN YENİ.
+  d.veri.gecmis = [
+    { url: 'https://c.test/son', baslik: 'C', ...z(9) },
+    { url: 'https://www.a.test/1', baslik: 'A bir', ...z(1) },
+    { url: 'https://b.test/1', baslik: 'B', ...z(2) },
+    { url: 'https://a.test/2', baslik: 'A iki', ...z(3) },
+    { url: 'https://b.test/2', baslik: 'B', ...z(4) },
+    { url: 'https://a.test/3', baslik: 'A üç', ...z(5) },
+    { url: 'bozuk-adres', baslik: 'x', ...z(6) }
+  ];
+  const s = d.sikGidilenler(8);
+  esit('sıralama ziyaret sayısına göre (yenilik değil)', s.map(x => x.host).join(','), 'a.test,b.test,c.test');
+  esit('www ile www\'suz aynı hostta toplanır', s[0].sayi, 3);
+  esit('hostun en son ziyaret edilen adresi/başlığı gösterilir', s[0].url + '|' + s[0].baslik, 'https://a.test/3|A üç');
+  esit('bozuk adres elenir', s.some(x => !x.host), false);
+  esit('limit uygulanır', d.sikGidilenler(2).length, 2);
+  // Eşit sayıda ziyaret: daha yeni olan önde.
+  d.veri.gecmis = [
+    { url: 'https://eski.test/', baslik: 'e', ...z(1) },
+    { url: 'https://yeni.test/', baslik: 'y', ...z(2) }
+  ];
+  esit('eşitlikte yeni olan önde', d.sikGidilenler(8)[0].host, 'yeni.test');
+  try { require('node:fs').unlinkSync(yol); } catch { /* olsun */ }
+}
+
 /* ---- kullanici araci ---- */
 /*
  * uaTemizle() KALDIRILDI ve testleri de. Dizeden "Electron/x" ile uygulama

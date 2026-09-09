@@ -325,6 +325,7 @@ module.exports = {
     'hata.bilinmeyen.metin': 'Something went wrong while loading the page.',
     'yenisekme.ara': 'Search',
     'yenisekme.sik': 'Frequently visited',
+    'yenisekme.sikKaldir': 'Remove from frequently visited',
     'yenisekme.oneCikan': 'Featured',
     'yenisekme.kisayolEkle': '+ Add shortcut',
     'yenisekme.kisayolIpucu': 'example.com — press Enter to add',

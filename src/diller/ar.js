@@ -325,6 +325,7 @@ module.exports = {
     'hata.bilinmeyen.metin': 'حدثت مشكلة غير معروفة أثناء تحميل الصفحة.',
     'yenisekme.ara': 'بحث',
     'yenisekme.sik': 'الأكثر زيارة',
+    'yenisekme.sikKaldir': 'Remove from frequently visited',
     'yenisekme.oneCikan': 'مميّز',
     'yenisekme.kisayolEkle': '+ إضافة اختصار',
     'yenisekme.kisayolIpucu': 'mithal.com — اضغط Enter للإضافة',

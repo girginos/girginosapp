@@ -325,6 +325,7 @@ module.exports = {
     'hata.bilinmeyen.metin': 'Beim Laden der Seite ist ein unbekanntes Problem aufgetreten.',
     'yenisekme.ara': 'Suchen',
     'yenisekme.sik': 'Häufig besucht',
+    'yenisekme.sikKaldir': 'Remove from frequently visited',
     'yenisekme.oneCikan': 'Empfohlen',
     'yenisekme.kisayolEkle': '+ Verknüpfung hinzufügen',
     'yenisekme.kisayolIpucu': 'beispiel.de — mit Enter hinzufügen',

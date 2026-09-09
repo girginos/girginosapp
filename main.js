@@ -132,7 +132,9 @@ function yeniSekmeAdresi() {
   // Adresi koşulsuz veriyoruz: sayfa açıldığında simge henüz inmemiş olabilir,
   // pusula-favicon:// yerel şeması o an yoksa 404 döner ve sayfa kısa bir
   // gecikmeyle bir kez daha dener.
-  const sonlar = store.sikGidilenler(8)
+  // 16 aday: sayfa kullanıcının sağ tıkla kaldırdığı hostları (localStorage)
+  // eleyip ilk 8'i gösterir; kaldırılanlar yerine sıradakiler gelsin.
+  const sonlar = store.sikGidilenler(16)
     .map((s) => ({ ...s, favicon: 'pusula-favicon://' + s.host }));
   url.searchParams.set('sonlar', JSON.stringify(sonlar));
   url.searchParams.set('duyurular', JSON.stringify(store.ayarlar.duyurular || []));
@@ -148,6 +150,7 @@ function yeniSekmeAdresi() {
     gecersiz: cev('yenisekme.gecersizAdres'),
     kisayol: cev('yenisekme.kisayol'),
     kaldir: cev('panel.kaldir'),
+    sikKaldir: cev('yenisekme.sikKaldir'),
     bosNot: cev('yenisekme.bosNot'),
     alt: engellenen > 0
       ? cev('yenisekme.engellendi', { n: engellenen.toLocaleString(ceviriler.yerel) })
@@ -1990,7 +1993,7 @@ function baslikCubuguRengi() {
   return {
     color: koyu ? '#16181d' : '#eef0f4',
     symbolColor: koyu ? '#e8eaee' : '#3a3f4b',
-    height: 40
+    height: 38   // #baslik ile aynı (sekme üstündeki boşluk 7px -> 3px)
   };
 }
 
