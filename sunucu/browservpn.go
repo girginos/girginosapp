@@ -8,11 +8,17 @@
 //
 // KİMLİK DOĞRULAMA — OTOMATİK, KULLANICI GİRİŞSİZ:
 // Kullanıcı token yazmaz. İstemci cihaz kimliğini `/kayit` uç noktasına gönderir,
-// sunucu gizli anahtarla token = base64url(HMAC-SHA256(secret, cihaz)) üretip
-// döner. Proxy kimlik doğrulaması `Proxy-Authorization: Basic base64(cihaz:token)`
-// ve sunucu HMAC'i yeniden hesaplayıp karşılaştırır (DURUMSUZ: token dosyası yok).
-// Her cihaz = ayrı token = ayrı 100 Mbps kovası. Kayıt açık (kimliksiz); kötüye
-// kullanım denetimi ileride (limit yine token başına korur).
+// sunucu SÜRELİ bir token üretir: "<bitis>.<HMAC(secret, cihaz|bitis)>". Proxy
+// kimlik doğrulaması `Proxy-Authorization: Basic base64(cihaz:token)`; sunucu
+// MAC'i yeniden hesaplayıp sabit zamanda karşılaştırır (DURUMSUZ: token dosyası
+// yok, süre token'ın içinde ve MAC'e dahil olduğu için oynanamaz).
+//
+// KÖTÜYE KULLANIM: /kayit bilerek kimliksiz (kullanıcı hiçbir şey girmesin).
+// Tek başına bırakılsa saldırgan sınırsız kimlikle sınırsız token üretip
+// "kişi başı 100 Mbps"i anlamsızlaştırır ve sunucuyu açık proxy'ye çevirirdi.
+// Üç önlem: (1) bant limiti cihazın YANINDA kaynak IP'ye de uygulanır - token
+// çoğaltmak ek bant kazandırmaz, (2) /kayit IP başına saatlik kotalı,
+// (3) token'lar süreli, biriktirilenler ölür. Ayrıntı: aşağıdaki sabitler.
 package main
 
 import (
@@ -28,6 +34,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
@@ -42,14 +49,41 @@ const (
 	limitBytes = 12_500_000 // 100 Mbps = 100e6 bit/s ≈ 12.5 MB/s
 	certDir    = "/etc/browservpn/cert"
 	secretFile = "/etc/browservpn/secret" // gizli HMAC anahtarı (openssl rand -hex 32)
+
+	/*
+	 * KÖTÜYE KULLANIM ÖNLEMLERİ.
+	 *
+	 * /kayit kasıtlı olarak kimliksiz: kullanıcı hiçbir şey girmesin istiyoruz.
+	 * Ama kimliksiz kayıt tek başına bırakılırsa saldırgan sınırsız cihaz
+	 * kimliğiyle sınırsız token üretir ve "kişi başı 100 Mbps" sözü anlamını
+	 * yitirir; sunucu herkese açık bir proxy'ye döner.
+	 *
+	 * ÇÖZÜM: kıt kaynağı KİMLİK BAŞINA değil KAYNAK BAŞINA da kısıtlamak.
+	 *   1) Bant limiti hem cihaz hem KAYNAK IP için ayrı ayrı uygulanır -> bin
+	 *      token üretmek tek bir saldırgana ek bant kazandırmaz.
+	 *   2) Kayıt ucu IP başına saatlik kotayla sınırlı -> token çiftliği pahalı.
+	 *   3) Token'lar SÜRELİ -> biriktirilen token'lar kendiliğinden ölür.
+	 *      (İstemci VPN'i her açışta yeniden kaydoluyor, kullanıcı fark etmez.)
+	 */
+	tokenOmru     = 30 * 24 * time.Hour // token geçerlilik süresi
+	kayitSaatBasi = 10                  // IP başına saatlik kayıt kotası
+	kovaOmru      = time.Hour           // boşta kalan kova bu süre sonra silinir
 )
+
+type kova struct {
+	lim *rate.Limiter
+	son time.Time // son kullanım; temizlik bunu okuyor
+}
 
 var (
 	secretMu sync.RWMutex
 	secret   []byte
 
-	limMu    sync.Mutex
-	limiters = map[string]*rate.Limiter{}
+	// Kovalar sınırsız büyümemeli: saldırgan token üreterek belleği şişirebilir.
+	// Boştakiler temizleyici tarafından atılıyor (bkz. kovalariTemizle).
+	limMu         sync.Mutex
+	bantKovalari  = map[string]*kova{} // "cihaz:x" / "ip:x" -> bant limiti
+	kayitKovalari = map[string]*kova{} // IP -> kayıt kotası
 )
 
 // Gizli anahtarı diskten yükler. Yoksa/çok kısaysa süreç durur: anahtarsız
@@ -69,14 +103,24 @@ func loadSecret() {
 	log.Printf("secret yüklendi (%d bayt)", len(s))
 }
 
-// token = base64url(HMAC-SHA256(secret, cihaz)). Cihaz kimliği opak bir dizedir.
-func hmacToken(cihaz string) string {
+/*
+ * TOKEN = "<bitis>.<mac>", mac = base64url(HMAC-SHA256(secret, cihaz|bitis)).
+ *
+ * Bitiş zamanı token'ın İÇİNDE ve MAC'e dahil: saldırgan süreyi uzatmak için
+ * oynayamaz, çünkü MAC tutmaz. Sunucu hiçbir şey saklamıyor (durumsuz).
+ */
+func macHesapla(cihaz string, bitis int64) string {
 	secretMu.RLock()
 	key := secret
 	secretMu.RUnlock()
 	mac := hmac.New(sha256.New, key)
-	mac.Write([]byte(cihaz))
+	fmt.Fprintf(mac, "%s|%d", cihaz, bitis)
 	return base64.RawURLEncoding.EncodeToString(mac.Sum(nil))
+}
+
+func tokenUret(cihaz string) string {
+	bitis := time.Now().Add(tokenOmru).Unix()
+	return strconv.FormatInt(bitis, 10) + "." + macHesapla(cihaz, bitis)
 }
 
 // Cihaz kimliği kabul edilebilir mi? (aşırı/boş girdiyi ele)
@@ -104,36 +148,103 @@ func kimliksizHedef(host string) bool {
 	return kimliksizHedefler[strings.ToLower(host)]
 }
 
-// Kimlik doğrulama: token, cihaz için beklenen HMAC'e sabit-zaman eşit mi?
+// Kimlik doğrulama: süresi geçmemiş ve MAC'i tutan token mı? (sabit zaman)
 func kimlikDogrula(cihaz, token string) bool {
 	if !gecerliCihaz(cihaz) || token == "" {
 		return false
 	}
-	beklenen := hmacToken(cihaz)
-	return subtle.ConstantTimeCompare([]byte(beklenen), []byte(token)) == 1
+	i := strings.IndexByte(token, '.')
+	if i <= 0 {
+		return false // eski (süresiz) biçim artık kabul edilmiyor
+	}
+	bitis, err := strconv.ParseInt(token[:i], 10, 64)
+	if err != nil || time.Now().Unix() > bitis {
+		return false // bozuk ya da süresi geçmiş
+	}
+	beklenen := macHesapla(cihaz, bitis)
+	return subtle.ConstantTimeCompare([]byte(beklenen), []byte(token[i+1:])) == 1
 }
 
-func limiterFor(anahtar string) *rate.Limiter {
+// İstemcinin kaynak IP'si. X-Forwarded-For'a GÜVENİLMEZ: doğrudan internete
+// açığız, o başlığı saldırgan kendisi yazıp kotayı atlatırdı.
+func kaynakIP(r *http.Request) string {
+	ip, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		return r.RemoteAddr
+	}
+	return ip
+}
+
+func bantLimiti(anahtar string) *rate.Limiter {
 	limMu.Lock()
 	defer limMu.Unlock()
-	l := limiters[anahtar]
-	if l == nil {
-		l = rate.NewLimiter(rate.Limit(limitBytes), limitBytes)
-		limiters[anahtar] = l
+	k := bantKovalari[anahtar]
+	if k == nil {
+		k = &kova{lim: rate.NewLimiter(rate.Limit(limitBytes), limitBytes)}
+		bantKovalari[anahtar] = k
 	}
-	return l
+	k.son = time.Now()
+	return k.lim
 }
 
-// Token hızına göre kopya. n bayt için rezervasyon yapıp gecikmeyi uyguluyor.
-func limitedCopy(dst io.Writer, src io.Reader, l *rate.Limiter) {
+// IP başına kayıt kotası. Kota dolduysa false; çağıran 429 döner.
+func kayitIzni(ip string) bool {
+	limMu.Lock()
+	defer limMu.Unlock()
+	k := kayitKovalari[ip]
+	if k == nil {
+		k = &kova{lim: rate.NewLimiter(rate.Every(time.Hour/kayitSaatBasi), kayitSaatBasi)}
+		kayitKovalari[ip] = k
+	}
+	k.son = time.Now()
+	return k.lim.Allow()
+}
+
+// Boşta kalan kovaları atar: yoksa saldırgan sınırsız kimlik/IP ile belleği
+// şişirebilirdi (kotaları uygularken kendimizi tüketmeyelim).
+func kovalariTemizle() {
+	for {
+		time.Sleep(10 * time.Minute)
+		sinir := time.Now().Add(-kovaOmru)
+		limMu.Lock()
+		for a, k := range bantKovalari {
+			if k.son.Before(sinir) {
+				delete(bantKovalari, a)
+			}
+		}
+		for a, k := range kayitKovalari {
+			if k.son.Before(sinir) {
+				delete(kayitKovalari, a)
+			}
+		}
+		limMu.Unlock()
+	}
+}
+
+/*
+ * Sınırlı kopya. BİRDEN ÇOK limit uygulanabiliyor: cihaz kovası ADİL PAYLAŞIM
+ * için, kaynak IP kovası KÖTÜYE KULLANIMA karşı. En uzun gecikme kadar bekleniyor,
+ * yani en dar limit belirleyici oluyor.
+ */
+func limitedCopy(dst io.Writer, src io.Reader, ls ...*rate.Limiter) {
 	buf := make([]byte, 64*1024)
 	for {
 		n, err := src.Read(buf)
 		if n > 0 {
-			if r := l.ReserveN(time.Now(), n); r.OK() {
-				if d := r.Delay(); d > 0 {
-					time.Sleep(d)
+			simdi := time.Now()
+			var bekle time.Duration
+			for _, l := range ls {
+				if l == nil {
+					continue
 				}
+				if r := l.ReserveN(simdi, n); r.OK() {
+					if d := r.Delay(); d > bekle {
+						bekle = d
+					}
+				}
+			}
+			if bekle > 0 {
+				time.Sleep(bekle)
 			}
 			if _, werr := dst.Write(buf[:n]); werr != nil {
 				return
@@ -169,16 +280,27 @@ func stripHop(h http.Header) {
 	}
 }
 
-// Cihaz kaydı: kimliğe karşılık gelen HMAC token'ı döner. Kullanıcı girişsiz.
+/*
+ * Cihaz kaydı: kimliğe karşılık SÜRELİ token döner. Kullanıcı girişsiz.
+ *
+ * Kimlik doğrulaması YOK (tasarım gereği), bu yüzden IP başına saatlik kota
+ * var: token çiftliği kurmak pahalansın. Kota tek başına yeterli değil -
+ * asıl koruma bant limitinin KAYNAK IP'ye de uygulanması (bkz. handler).
+ */
 func handleKayit(w http.ResponseWriter, r *http.Request) {
 	cihaz := r.URL.Query().Get("cihaz")
 	if !gecerliCihaz(cihaz) {
 		http.Error(w, "gecersiz cihaz", http.StatusBadRequest)
 		return
 	}
+	if !kayitIzni(kaynakIP(r)) {
+		w.Header().Set("Retry-After", "3600")
+		http.Error(w, "kayit kotasi doldu", http.StatusTooManyRequests)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	w.Header().Set("Cache-Control", "no-store")
-	_ = json.NewEncoder(w).Encode(map[string]string{"token": hmacToken(cihaz)})
+	_ = json.NewEncoder(w).Encode(map[string]string{"token": tokenUret(cihaz)})
 }
 
 func handler(w http.ResponseWriter, r *http.Request) {
@@ -201,8 +323,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	// güncelleme alamıyorlardı. Yalnızca KENDİ güncelleme sunucumuza CONNECT
 	// kimliksiz geçer (açık relay değil; hedef sabit), kendi kovasıyla kısılır.
 	if r.Method == http.MethodConnect && kimliksizHedef(r.Host) {
-		ip, _, _ := net.SplitHostPort(r.RemoteAddr)
-		handleConnect(w, r, limiterFor("guncelleme:"+ip))
+		handleConnect(w, r, bantLimiti("guncelleme:"+kaynakIP(r)))
 		return
 	}
 
@@ -212,15 +333,22 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "proxy authentication required", http.StatusProxyAuthRequired)
 		return
 	}
-	lim := limiterFor(cihaz) // kova cihaz başına
+	/*
+	 * İKİ KOVA. Cihaz kovası kullanıcılar arasında ADİL PAYLAŞIM için; kaynak
+	 * IP kovası kötüye kullanımı keser: kimliksiz kayıt yüzünden saldırgan
+	 * istediği kadar token üretebilir ama hepsi aynı IP'den aktığı için toplam
+	 * bandı yine 100 Mbps'te kalır - token çoğaltmak kazanç sağlamaz.
+	 */
+	cihazKova := bantLimiti("cihaz:" + cihaz)
+	ipKova := bantLimiti("ip:" + kaynakIP(r))
 	if r.Method == http.MethodConnect {
-		handleConnect(w, r, lim)
+		handleConnect(w, r, cihazKova, ipKova)
 		return
 	}
-	handleHTTP(w, r, lim)
+	handleHTTP(w, r, cihazKova, ipKova)
 }
 
-func handleConnect(w http.ResponseWriter, r *http.Request, lim *rate.Limiter) {
+func handleConnect(w http.ResponseWriter, r *http.Request, ls ...*rate.Limiter) {
 	dst, err := net.DialTimeout("tcp", r.Host, 20*time.Second)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
@@ -238,12 +366,12 @@ func handleConnect(w http.ResponseWriter, r *http.Request, lim *rate.Limiter) {
 		return
 	}
 	client.Write([]byte("HTTP/1.1 200 Connection Established\r\n\r\n"))
-	go func() { limitedCopy(dst, client, lim); dst.Close() }()
-	limitedCopy(client, dst, lim)
+	go func() { limitedCopy(dst, client, ls...); dst.Close() }()
+	limitedCopy(client, dst, ls...)
 	client.Close()
 }
 
-func handleHTTP(w http.ResponseWriter, r *http.Request, lim *rate.Limiter) {
+func handleHTTP(w http.ResponseWriter, r *http.Request, ls ...*rate.Limiter) {
 	if !r.URL.IsAbs() {
 		http.Error(w, "yalnızca proxy istekleri", http.StatusBadRequest)
 		return
@@ -263,11 +391,12 @@ func handleHTTP(w http.ResponseWriter, r *http.Request, lim *rate.Limiter) {
 		}
 	}
 	w.WriteHeader(resp.StatusCode)
-	limitedCopy(w, resp.Body, lim)
+	limitedCopy(w, resp.Body, ls...)
 }
 
 func main() {
 	loadSecret()
+	go kovalariTemizle()   // boşta kalan kotalar belleği şişirmesin
 	// SIGHUP: gizli anahtarı yeniden yükle (döndürülürse restart gerekmesin).
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGHUP)
@@ -293,6 +422,6 @@ func main() {
 		ReadTimeout:  0,
 		WriteTimeout: 0,
 	}
-	log.Printf("browservpn :443 dinliyor (domain %s, otomatik HMAC token, limit 100 Mbps/cihaz)", domain)
+	log.Printf("browservpn :443 dinliyor (domain %s, otomatik süreli token, limit 100 Mbps/cihaz + 100 Mbps/IP)", domain)
 	log.Fatal(srv.ListenAndServeTLS("", ""))
 }
