@@ -94,6 +94,16 @@ func gecerliCihaz(cihaz string) bool {
 	return true
 }
 
+// Kimliksiz tünele izin verilen hedefler: yalnızca kendi güncelleme sunucumuz.
+// Sabit liste; kullanıcı girdisiyle genişlemez (açık relay olmasın).
+var kimliksizHedefler = map[string]bool{
+	"browserapp.girginos.app:443": true,
+}
+
+func kimliksizHedef(host string) bool {
+	return kimliksizHedefler[strings.ToLower(host)]
+}
+
 // Kimlik doğrulama: token, cihaz için beklenen HMAC'e sabit-zaman eşit mi?
 func kimlikDogrula(cihaz, token string) bool {
 	if !gecerliCihaz(cihaz) || token == "" {
@@ -183,6 +193,16 @@ func handler(w http.ResponseWriter, r *http.Request) {
 		default:
 			http.NotFound(w, r)
 		}
+		return
+	}
+
+	// GÜNCELLEME SUNUCUSUNA KİMLİKSİZ TÜNEL: eski istemciler (<=0.5.5) proxy
+	// kimliğini güncelleme isteğine ekleyemiyordu; VPN açıkken 407 alıp
+	// güncelleme alamıyorlardı. Yalnızca KENDİ güncelleme sunucumuza CONNECT
+	// kimliksiz geçer (açık relay değil; hedef sabit), kendi kovasıyla kısılır.
+	if r.Method == http.MethodConnect && kimliksizHedef(r.Host) {
+		ip, _, _ := net.SplitHostPort(r.RemoteAddr)
+		handleConnect(w, r, limiterFor("guncelleme:"+ip))
 		return
 	}
 

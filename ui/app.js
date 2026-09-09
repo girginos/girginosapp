@@ -1409,19 +1409,6 @@ function ayarlarPaneli() {
   dilSec.addEventListener('change', () => window.pusula.ayarDegistir('dil', dilSec.value));
   g.appendChild(ayarSatiri(cev('ayar.dil'), cev('ayar.dilAciklama'), dilSec));
 
-  const temaSec = document.createElement('select');
-  for (const [deger, anahtar] of [
-    ['sistem', 'ayar.temaSistem'], ['acik', 'ayar.temaAcik'], ['koyu', 'ayar.temaKoyu']
-  ]) {
-    const o = document.createElement('option');
-    o.value = deger;
-    o.textContent = cev(anahtar);
-    if ((a.tema || 'sistem') === deger) o.selected = true;
-    temaSec.appendChild(o);
-  }
-  temaSec.addEventListener('change', () => window.pusula.ayarDegistir('tema', temaSec.value));
-  g.appendChild(ayarSatiri(cev('ayar.tema'), cev('ayar.temaAciklama'), temaSec));
-
   const motor = document.createElement('select');
   for (const [k, v] of Object.entries(durum.motorlar)) {
     const o = document.createElement('option');
@@ -1699,6 +1686,21 @@ function ayarlarPaneli() {
 
   /* ---- görünüm ---- */
   baslik('ayar.bolumGorunum');
+
+  // Tema seçici GÖRÜNÜM sekmesinde: "Arama ve başlangıç" altındayken kullanıcı
+  // koyu temayı bulamıyordu (sekme adı neredeyse oraya bakıyor).
+  const temaSec = document.createElement('select');
+  for (const [deger, anahtar] of [
+    ['sistem', 'ayar.temaSistem'], ['acik', 'ayar.temaAcik'], ['koyu', 'ayar.temaKoyu']
+  ]) {
+    const o = document.createElement('option');
+    o.value = deger;
+    o.textContent = cev(anahtar);
+    if ((a.tema || 'sistem') === deger) o.selected = true;
+    temaSec.appendChild(o);
+  }
+  temaSec.addEventListener('change', () => window.pusula.ayarDegistir('tema', temaSec.value));
+  g.appendChild(ayarSatiri(cev('ayar.tema'), cev('ayar.temaAciklama'), temaSec));
 
   g.appendChild(ayarSatiri(cev('ayar.yerImleriCubugu'), cev('ayar.yerImleriCubuguAciklama'),
     anahtar(a.yerImleriCubugu, (v) => window.pusula.ayarDegistir('yerImleriCubugu', v))));

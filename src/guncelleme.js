@@ -23,6 +23,8 @@ const KONTROL_ARALIGI_MS = 6 * 60 * 60 * 1000;
 const ILK_KONTROL_GECIKMESI_MS = 45 * 1000;   // açılışta ağa yüklenmeyelim
 const EN_BUYUK_MANIFEST = 64 * 1024;
 
+const { vekilliFetch } = require('./vekil-istek');
+
 const DURUMLAR = {
   KAPALI: 'kapali',            // anahtar/adres yapılandırılmamış
   PAKETLENMEMIS: 'paketlenmemis',
@@ -43,11 +45,14 @@ class GuncellemeYoneticisi {
    * @param {Function} p.degisti    durum değişince çağrılır
    * @param {Function} p.ayarOku    () => { otomatikKontrol, otomatikIndir, kanal }
    */
-  constructor({ app, oturum, degisti, ayarOku }) {
+  constructor({ app, oturum, degisti, ayarOku, kimlikVer }) {
     this.app = app;
     this.oturum = oturum;
     this.degisti = degisti || (() => {});
     this.ayarOku = ayarOku || (() => ({}));
+    // Proxy (VPN) kimliği: (authInfo) => [kullanici, parola] | null. Yoksa
+    // kimlikli bir proxy arkasında manifest ve paket 407 ile düşer.
+    this.kimlikVer = kimlikVer || (() => null);
 
     this.durum = DURUMLAR.BOSTA;
     this.sebep = '';
@@ -90,6 +95,15 @@ class GuncellemeYoneticisi {
       u.verifyUpdateCodeSignature = true;
       u.publisherName = [anahtarlar.YAYINCI_ADI];
     }
+
+    // Paket indirme electron-updater'ın kendi isteğiyle gider; kimlikli proxy
+    // (VPN) arkasında o da 407 yer. electron-updater proxy kimliğini 'login'
+    // olayıyla soruyor (AppUpdater -> ElectronHttpExecutor); buradan veriyoruz.
+    u.on('login', (authInfo, cb) => {
+      const k = authInfo && authInfo.isProxy ? this.kimlikVer(authInfo) : null;
+      if (Array.isArray(k) && k.length === 2) cb(String(k[0]), String(k[1]));
+      else cb();
+    });
 
     u.on('download-progress', (p) => {
       this.ilerleme = Math.round(p.percent || 0);
@@ -137,10 +151,12 @@ class GuncellemeYoneticisi {
   async _manifestiCek() {
     const kok = anahtarlar.FEED_ADRESI.replace(/\/+$/, '');
     const cek = async (yol) => {
-      const y = await this.oturum.fetch(kok + '/' + yol, {
+      // net.request tabanlı: session.fetch proxy 407'de kimlik VEREMİYORDU
+      // (VPN açıkken "Denetlenemedi: HTTP 407"). Bkz. src/vekil-istek.js.
+      const y = await vekilliFetch(this.oturum, kok + '/' + yol, {
         cache: 'no-cache',
         headers: { 'User-Agent': 'GirginosBrowser/' + this.app.getVersion() }
-      });
+      }, this.kimlikVer);
       if (y.status !== 200) throw new Error('HTTP ' + y.status + ' (' + yol + ')');
       const metin = await y.text();
       if (metin.length > EN_BUYUK_MANIFEST) throw new Error('manifest çok büyük');

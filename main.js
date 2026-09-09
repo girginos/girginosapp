@@ -41,6 +41,7 @@ const { SertifikaDeposu } = require('./src/sertifikalar');
 const { silinecekCerezler, cerezSilmeUrl } = require('./src/cerezler');
 const { vekilKurallari, adresGecerliMi, atlamaGecerliMi } = require('./src/vekil');
 const { vpnVekilKurali, lokasyonGecerliMi: vpnLokasyonGecerliMi, katalog: vpnKatalog, vpnKayitUrl } = require('./src/vpn');
+const { vekilliFetch } = require('./src/vekil-istek');
 const { ipucuBasliklari } = require('./src/istemci-ipuclari');
 
 /*
@@ -1520,27 +1521,23 @@ function prosedurelEslesenler(host) {
  * webContents gezinmeleri için), ClientRequest'in kendi 'login' olayı ise
  * proxy kimlik doğrulamasını yapar — böylece token'lı çıkış gerçekten ölçülür.
  */
-function vpnCikisIpAl() {
-  return new Promise((coz) => {
-    let bitti = false;
-    const bitir = (v) => { if (!bitti) { bitti = true; coz(v); } };
-    try {
-      const req = net.request({ url: 'https://api.ipify.org', session: ses, useSessionCookies: false });
-      req.on('login', (authInfo, cb) => {
-        if (authInfo.isProxy && store.ayarlar.vpnAcik) cb(cihazKimligi(), store.ayarlar.cihazToken || '');
-        else cb();
-      });
-      req.on('response', (res) => {
-        let veri = '';
-        res.on('data', (d) => { veri += d.toString(); });
-        res.on('end', () => bitir(veri.trim().slice(0, 64)));
-        res.on('error', () => bitir(''));
-      });
-      req.on('error', () => bitir(''));
-      setTimeout(() => bitir(''), 15000); // askıda kalmasın
-      req.end();
-    } catch (e) { bitir(''); }
-  });
+/*
+ * Proxy kimliği (yalnızca VPN açıkken): kullanıcı = cihaz kimliği, parola =
+ * otomatik alınan token. app 'login' ile aynı kural; net.request tabanlı
+ * isteklerin (güncelleme, liste, favicon, çıkış IP) 'login' olayına verilir.
+ * Yalnız isProxy için çağrılır; sitelerin kendi HTTP-auth'una karışmaz.
+ */
+function vpnKimlik(authInfo) {
+  if (!store || !authInfo || !authInfo.isProxy || !store.ayarlar.vpnAcik) return null;
+  return [cihazKimligi(), store.ayarlar.cihazToken || ''];
+}
+
+async function vpnCikisIpAl() {
+  try {
+    const y = await vekilliFetch(ses, 'https://api.ipify.org', { cache: 'no-store', zamanAsimi: 15000 }, vpnKimlik);
+    if (!y.ok) return '';
+    return (await y.text()).trim().slice(0, 64);
+  } catch (e) { return ''; }
 }
 
 /*
@@ -1765,15 +1762,18 @@ async function oturumKur() {
     store,
     veriDizini: app.getPath('userData'),
     getir: async (url, basliklar) => {
-      const y = await indirmeOturumu.fetch(url, {
+      // vekilliFetch: VPN (kimlikli proxy) açıkken session.fetch 407 yiyordu,
+      // listeler sessizce güncellenemiyordu.
+      const y = await vekilliFetch(indirmeOturumu, url, {
         cache: 'no-cache',
         headers: { 'User-Agent': 'GirginosBrowser/' + app.getVersion(), ...basliklar }
-      });
+      }, vpnKimlik);
+      const baslik = (ad) => { const v = y.headers[ad]; return Array.isArray(v) ? (v[0] || '') : (v || ''); };
       return {
         durum: y.status,
         metin: y.status === 200 ? await y.text() : '',
-        etag: y.headers.get('etag') || '',
-        sonDegisiklik: y.headers.get('last-modified') || ''
+        etag: baslik('etag'),
+        sonDegisiklik: baslik('last-modified')
       };
     },
     degisti: () => { durumGonder(); kozmetigiTazele(); antiAdblockKur(); blocker.uboyuKur(); }
@@ -1792,6 +1792,7 @@ async function oturumKur() {
   guncelleme = new GuncellemeYoneticisi({
     app,
     oturum: indirmeOturumu,
+    kimlikVer: vpnKimlik,   // VPN açıkken manifest + paket indirme proxy kimliğiyle gitsin (407 düzeltmesi)
     degisti: durumGonder,
     ayarOku: () => ({
       otomatikKontrol: store.ayarlar.guncellemeKontrol,
