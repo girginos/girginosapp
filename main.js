@@ -165,6 +165,17 @@ function yeniSekmeAdresi() {
 const HATA_GRUPLARI = {
   '-105': 'dns',
   '-106': 'cevrimdisi',
+  /*
+   * VEKİL HATALARI AYRI GRUP. Vekil ayarı bozukken her sayfa "bağlantı
+   * hatası" diyordu; kullanıcı sorunun KENDİ ayarında olduğunu anlayamayıp
+   * ağını ya da siteyi suçluyordu (ölçüldü: adresi boş 'elle' vekil bütün
+   * tarayıcıyı sessizce kapatıyor). Artık hata sayfası doğrudan vekili
+   * işaret ediyor.
+   */
+  '-130': 'vekil',   // PROXY_CONNECTION_FAILED
+  '-131': 'vekil',   // PROXY_AUTH_UNSUPPORTED
+  '-336': 'vekil',   // PROXY_AUTH_REQUESTED
+  '-115': 'vekil',   // TUNNEL_CONNECTION_FAILED
   '-102': 'baglanti', '-101': 'baglanti', '-324': 'baglanti',
   '-7': 'zamanAsimi', '-118': 'zamanAsimi',
   '-200': 'sertifikaAd',
@@ -177,6 +188,7 @@ const HATA_ONERILERI = {
   dns: ['sayfa.oneriAdres', 'sayfa.oneriBaglanti', 'sayfa.oneriYenile'],
   cevrimdisi: ['sayfa.oneriBaglanti', 'sayfa.oneriYenile'],
   baglanti: ['sayfa.oneriYenile', 'sayfa.oneriBaglanti'],
+  vekil: ['sayfa.oneriVekil', 'sayfa.oneriYenile'],
   zamanAsimi: ['sayfa.oneriYenile', 'sayfa.oneriBaglanti'],
   sertifikaAd: ['sayfa.oneriAdres', 'sayfa.oneriBilgiGirme'],
   sertifikaSure: ['sayfa.oneriBilgiGirme', 'sayfa.oneriYenile'],
@@ -2333,6 +2345,28 @@ function ipcKur() {
   on('sekme:yeni', (_e, url) => sekmeOlustur({ url: url || undefined }));
   on('sekme:kapat', (_e, id) => sekmeKapat(id));
   on('sekme:sec', (_e, id) => sekmeSec(id));
+
+  /*
+   * SEKME SIRALAMA (sürükleyerek taşıma). Sıra, sekmeler Map'inin ekleme
+   * sırasıdır; arayüz yeni sırayı id listesi olarak bildiriyor.
+   *
+   * Gelen liste DOĞRULANIYOR: yalnız var olan id'ler, tekrarsız ve TAM sayıda
+   * olmalı. Eksik/fazla listeyle Map'i yeniden kurmak sekme kaybettirirdi -
+   * arayüz ile ana süreç bir an için ayrışırsa (yeni sekme tam o anda açıldı)
+   * bu kolayca olur, o yüzden sessizce yok sayıyoruz.
+   */
+  on('sekme:sirala', (_e, sira) => {
+    if (!Array.isArray(sira) || sira.length !== sekmeler.size) return;
+    const gorulen = new Set();
+    for (const id of sira) {
+      if (!sekmeler.has(id) || gorulen.has(id)) return;
+      gorulen.add(id);
+    }
+    const yeni = sira.map((id) => [id, sekmeler.get(id)]);
+    sekmeler.clear();
+    for (const [id, t] of yeni) sekmeler.set(id, t);
+    durumGonder();
+  });
 
   on('gez:git', (_e, girdi) => {
     const hedef = resolveInput(girdi, store.ayarlar.aramaMotoru);

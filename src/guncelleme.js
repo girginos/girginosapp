@@ -121,9 +121,20 @@ class GuncellemeYoneticisi {
       this._durumaGec(DURUMLAR.HAZIR);
     });
     u.on('error', (e) => {
-      this.sebep = String((e && e.message) || e).slice(0, 200);
+      this.sebep = this._sebepCevir(String((e && e.message) || e));
       this._durumaGec(DURUMLAR.HATA);
     });
+  }
+
+  /*
+   * Ham Chromium hatası kullanıcıya hiçbir şey anlatmıyor:
+   * "net::ERR_PROXY_CONNECTION_FAILED" gördüğünde sorunun KENDİ vekil
+   * ayarında olduğunu anlaması imkânsız (ölçüldü: vekilKip=elle + boş adres
+   * fail-closed vekile düşüyor ve her istek böyle patlıyor).
+   */
+  _sebepCevir(ham) {
+    if (/ERR_PROXY|PROXY_CONNECTION|ERR_TUNNEL/i.test(ham)) return 'vekil';
+    return ham.slice(0, 200);
   }
 
   _durumaGec(yeni) {
@@ -221,7 +232,7 @@ class GuncellemeYoneticisi {
       this._durumaGec(DURUMLAR.BULUNDU);
       if (ayar.otomatikIndir && !elle) await this.indir();
     } catch (e) {
-      this.sebep = String((e && e.message) || e).slice(0, 200);
+      this.sebep = this._sebepCevir(String((e && e.message) || e));
       this._durumaGec(DURUMLAR.HATA);
     } finally {
       this._calisiyor = false;
@@ -236,7 +247,7 @@ class GuncellemeYoneticisi {
     try {
       await this.autoUpdater.downloadUpdate();
     } catch (e) {
-      this.sebep = String((e && e.message) || e).slice(0, 200);
+      this.sebep = this._sebepCevir(String((e && e.message) || e));
       this._durumaGec(DURUMLAR.HATA);
     }
     return this.bilgi();

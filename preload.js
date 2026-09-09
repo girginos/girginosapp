@@ -30,6 +30,7 @@ contextBridge.exposeInMainWorld('pusula', {
   yeniSekme: (url) => ipcRenderer.send('sekme:yeni', url),
   sekmeKapat: (id) => ipcRenderer.send('sekme:kapat', id),
   sekmeSec: (id) => ipcRenderer.send('sekme:sec', id),
+  sekmeSirala: (sira) => ipcRenderer.send('sekme:sirala', sira),
 
   // Gezinme
   git: (girdi) => ipcRenderer.send('gez:git', girdi),

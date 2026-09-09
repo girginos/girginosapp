@@ -80,6 +80,17 @@ html, body, #panel, #panelBaslik, .ayar-kart, .ayar-sekmeler, .istatistik .kutu,
 
 #surukleAlan { flex: 1; min-width: 60px; height: 100%; -webkit-app-region: drag; }
 
+/*
+ * Sekme şeridindeki "+" düğmesi. #baslik alta yaslıyor (align-items:flex-end);
+ * sekmeler 35px, düğme 26px olduğu için düğme ~5px AŞAĞIDA kalıyordu (ölçüldü).
+ * Biraz büyütüp yukarı kaldırarak merkezini sekme merkeziyle hizalıyoruz.
+ */
+#yeniSekme {
+  flex: 0 0 28px;
+  width: 28px; height: 28px;
+  margin-bottom: 4px;
+}
+
 #sekmeler {
   display: flex;
   align-items: flex-end;
@@ -110,6 +121,18 @@ html, body, #panel, #panelBaslik, .ayar-kart, .ayar-sekmeler, .istatistik .kutu,
   transition: background var(--gecis), color var(--gecis);
   -webkit-app-region: no-drag;
 }
+
+/* Taşınan sekme: parmağın altında olduğu belli olsun, ayraçlar karışmasın. */
+.sekme.suruklenen {
+  opacity: .85;
+  box-shadow: 0 6px 18px rgba(16, 20, 30, .35);
+  cursor: grabbing;
+  z-index: 2;
+}
+.sekme.suruklenen::before, .sekme.suruklenen + .sekme::before { display: none; }
+/* Sürükleme sırasında metin seçimi ve imleç titremesi olmasın. */
+body.sekme-tasiniyor { cursor: grabbing; user-select: none; }
+body.sekme-tasiniyor .sekme { transition: none; }
 
 /* Pasif sekmeler arasında ince ayraç: bitişik sekmeler tek blok gibi durmasın. */
 .sekme + .sekme::before {

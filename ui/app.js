@@ -244,10 +244,72 @@ function sekmeleriCiz() {
     kapat.addEventListener('click', (e) => { e.stopPropagation(); window.pusula.sekmeKapat(t.id); });
     d.appendChild(kapat);
 
-    d.addEventListener('click', () => window.pusula.sekmeSec(t.id));
+    d.dataset.id = String(t.id);
+    d.addEventListener('click', () => {
+      // Sürükleme bittiğinde tarayıcı bir de 'click' üretiyor; taşınan sekmeyi
+      // ayrıca seçmemek için o tıklamayı yutuyoruz.
+      if (d._suruklendi) { d._suruklendi = false; return; }
+      window.pusula.sekmeSec(t.id);
+    });
     d.addEventListener('auxclick', (e) => { if (e.button === 1) window.pusula.sekmeKapat(t.id); });
+    sekmeSuruklemeKur(d);
     el.sekmeler.appendChild(d);
   }
+}
+
+/*
+ * SEKME TAŞIMA (sürükle-bırak).
+ *
+ * HTML5 drag-and-drop yerine fare olayları: başlık çubuğu -webkit-app-region
+ * ile pencere sürüklemesine karışıyor ve HTML5 sürüklemesi orada güvenilmez
+ * çalışıyor. Burada sekme DOM'da canlı yer değiştiriyor (Chrome'daki gibi),
+ * bırakınca yeni sıra ana sürece bildiriliyor.
+ *
+ * EŞİK: 5px'ten kısa hareketler sürükleme sayılmıyor, yoksa her tıklama
+ * kazara sıralamayı bozardı.
+ */
+const SURUKLE_ESIGI = 5;
+
+function sekmeSuruklemeKur(d) {
+  d.addEventListener('mousedown', (e) => {
+    if (e.button !== 0 || e.target.closest('.kapat')) return;
+    const baslangicX = e.clientX;
+    let basladi = false;
+
+    const hareket = (ev) => {
+      if (!basladi) {
+        if (Math.abs(ev.clientX - baslangicX) < SURUKLE_ESIGI) return;
+        basladi = true;
+        d._suruklendi = true;
+        d.classList.add('suruklenen');
+        document.body.classList.add('sekme-tasiniyor');
+      }
+      // İşaretçi hangi kardeşin ortasını geçtiyse oraya taşı.
+      const kardesler = [...el.sekmeler.children].filter((x) => x !== d);
+      let hedef = null;
+      for (const k of kardesler) {
+        const r = k.getBoundingClientRect();
+        if (ev.clientX < r.left + r.width / 2) { hedef = k; break; }
+      }
+      if (hedef) el.sekmeler.insertBefore(d, hedef);
+      else el.sekmeler.appendChild(d);
+    };
+
+    const birak = () => {
+      document.removeEventListener('mousemove', hareket);
+      document.removeEventListener('mouseup', birak);
+      d.classList.remove('suruklenen');
+      document.body.classList.remove('sekme-tasiniyor');
+      if (!basladi) return;
+      const sira = [...el.sekmeler.children]
+        .map((x) => Number(x.dataset.id))
+        .filter((n) => Number.isFinite(n));
+      window.pusula.sekmeSirala(sira);
+    };
+
+    document.addEventListener('mousemove', hareket);
+    document.addEventListener('mouseup', birak);
+  });
 }
 
 function yerTutucu() {
@@ -1488,6 +1550,25 @@ function ayarlarPaneli() {
     vekilAtla.disabled = !elle;
   };
   vekilKip.addEventListener('change', () => {
+    /*
+     * "Elle" seçilip adres BOŞ bırakılırsa vekil kuralı üretilemiyor,
+     * fail-closed devreye giriyor ve tarayıcı tümden ağa çıkamıyor - üstelik
+     * sebebi hiçbir yerde görünmüyordu (ölçüldü: güncelleme dahil her istek
+     * ERR_PROXY_CONNECTION_FAILED). YARIM KALMIŞ ayarı kasıtlı bir gizlilik
+     * tercihi gibi uygulamıyoruz; önce adres istiyoruz.
+     *
+     * Adresi GİRİLMİŞ bir vekil çalışmıyorsa fail-closed doğru davranıştır:
+     * orada trafiği doğrudan göndermek, vekil isteyen kullanıcıyı ele verir.
+     */
+    if (vekilKip.value === 'elle' && !vekilAdres.value.trim()) {
+      vekilKip.value = a.vekilKip || 'kapali';
+      vekilUyari.textContent = cev('ayar.vekilAdresGerek');
+      vekilUyari.hidden = false;
+      vekilAdres.disabled = false;
+      vekilAdres.focus();
+      return;
+    }
+    vekilUyari.hidden = true;
     window.pusula.ayarDegistir('vekilKip', vekilKip.value);
     elleAlanlari();
   });
@@ -1624,7 +1705,9 @@ function ayarlarPaneli() {
   if (gu.durum === 'bulundu') gDurum = cev('guncelleme.bulundu', { surum: gu.bulunanSurum });
   else if (gu.durum === 'iniyor') gDurum = cev('guncelleme.iniyor', { n: gu.ilerleme });
   else if (gu.durum === 'hazir') gDurum = cev('guncelleme.hazir', { surum: gu.bulunanSurum });
-  else if (gu.durum === 'hata') gDurum = cev('guncelleme.hata', { sebep: gu.sebep || '?' });
+  else if (gu.durum === 'hata') gDurum = gu.sebep === 'vekil'
+    ? cev('guncelleme.hataVekil')
+    : cev('guncelleme.hata', { sebep: gu.sebep || '?' });
   else gDurum = cev('guncelleme.' + gu.durum);
 
   const gDugme = document.createElement('button');

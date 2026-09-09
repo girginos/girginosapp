@@ -327,6 +327,7 @@ module.exports = {
     'guncelleme.iniyor': 'İndiriliyor… %{n}',
     'guncelleme.hazir': '{surum} kuruluma hazır.',
     'guncelleme.hata': 'Denetlenemedi: {sebep}',
+    'guncelleme.hataVekil': 'Vekil sunucu ayarı bağlantıyı engelliyor. Ayarlar > Vekil sunucu bölümünü kontrol edin (adres boşsa \x27Kapalı\x27 ya da \x27Sistem\x27 seçin).',
     /* --- yeni sekme ve hata sayfasi --- */
     'sayfa.tekrarDene': 'Tekrar dene',
     'sayfa.oneriYenile': 'Sayfayı yenileyin',
@@ -337,6 +338,10 @@ module.exports = {
     'hata.dns.metin': 'Bu adresin IP karşılığı çözülemedi. Alan adı yanlış yazılmış ya da yayında olmayabilir.',
     'hata.cevrimdisi.baslik': 'İnternet bağlantısı yok',
     'hata.cevrimdisi.metin': 'Cihazınız şu anda ağa bağlı görünmüyor.',
+    'hata.vekil.baslik': 'Vekil sunucu bağlantıyı engelliyor',
+    'hata.vekil.metin': 'Tarayıcı, ayarladığınız vekil sunucuya bağlanamadı. Vekil adresi boş ya da hatalı olabilir; bu durumda hiçbir sayfa açılmaz.',
+    'sayfa.oneriVekil': 'Ayarlar > Vekil sunucu bölümünü açın; adres boşsa \x27Kapalı\x27 ya da \x27Sistem\x27 seçin.',
+    'ayar.vekilAdresGerek': 'Önce vekil adresini girin; adres olmadan \x27Elle\x27 seçilirse tarayıcı ağa çıkamaz.',
     'hata.baglanti.baslik': 'Bağlantı kurulamadı',
     'hata.baglanti.metin': 'Sunucu bağlantıyı kabul etmedi ya da bağlantı beklenmedik şekilde kesildi.',
     'hata.zamanAsimi.baslik': 'Bağlantı zaman aşımına uğradı',

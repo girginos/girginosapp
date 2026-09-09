@@ -314,6 +314,7 @@ module.exports = {
     'guncelleme.iniyor': '正在下载… {n}%',
     'guncelleme.hazir': '{surum} 已准备好安装。',
     'guncelleme.hata': '检查失败：{sebep}',
+    'guncelleme.hataVekil': 'The proxy setting is blocking the connection. Check Settings > Proxy (if the address is empty, pick \x27Off\x27 or \x27System\x27).',
     /* --- yeni sekme ve hata sayfasi --- */
     'sayfa.tekrarDene': '重试',
     'sayfa.oneriYenile': '重新加载页面',
@@ -324,6 +325,10 @@ module.exports = {
     'hata.dns.metin': '无法将此地址解析为 IP。域名可能拼写错误或已下线。',
     'hata.cevrimdisi.baslik': '没有网络连接',
     'hata.cevrimdisi.metin': '您的设备似乎未连接到网络。',
+    'hata.vekil.baslik': 'The proxy is blocking the connection',
+    'hata.vekil.metin': 'The browser could not reach the proxy you configured. The proxy address may be empty or wrong; no page can load in that state.',
+    'sayfa.oneriVekil': 'Open Settings > Proxy; if the address is empty, pick \x27Off\x27 or \x27System\x27.',
+    'ayar.vekilAdresGerek': 'Enter the proxy address first; choosing \x27Manual\x27 without one leaves the browser with no network.',
     'hata.baglanti.baslik': '无法连接',
     'hata.baglanti.metin': '服务器拒绝了连接，或连接意外中断。',
     'hata.zamanAsimi.baslik': '连接超时',

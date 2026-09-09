@@ -314,6 +314,7 @@ module.exports = {
     'guncelleme.iniyor': 'Wird geladen… {n} %',
     'guncelleme.hazir': 'Version {surum} ist installationsbereit.',
     'guncelleme.hata': 'Prüfung fehlgeschlagen: {sebep}',
+    'guncelleme.hataVekil': 'The proxy setting is blocking the connection. Check Settings > Proxy (if the address is empty, pick \x27Off\x27 or \x27System\x27).',
     /* --- yeni sekme ve hata sayfasi --- */
     'sayfa.tekrarDene': 'Erneut versuchen',
     'sayfa.oneriYenile': 'Laden Sie die Seite neu',
@@ -324,6 +325,10 @@ module.exports = {
     'hata.dns.metin': 'Zu dieser Adresse konnte keine IP ermittelt werden. Die Domain ist evtl. falsch geschrieben oder offline.',
     'hata.cevrimdisi.baslik': 'Keine Internetverbindung',
     'hata.cevrimdisi.metin': 'Ihr Gerät scheint derzeit nicht mit einem Netzwerk verbunden zu sein.',
+    'hata.vekil.baslik': 'The proxy is blocking the connection',
+    'hata.vekil.metin': 'The browser could not reach the proxy you configured. The proxy address may be empty or wrong; no page can load in that state.',
+    'sayfa.oneriVekil': 'Open Settings > Proxy; if the address is empty, pick \x27Off\x27 or \x27System\x27.',
+    'ayar.vekilAdresGerek': 'Enter the proxy address first; choosing \x27Manual\x27 without one leaves the browser with no network.',
     'hata.baglanti.baslik': 'Verbindung nicht möglich',
     'hata.baglanti.metin': 'Der Server hat die Verbindung abgelehnt oder sie wurde unerwartet getrennt.',
     'hata.zamanAsimi.baslik': 'Zeitüberschreitung der Verbindung',
