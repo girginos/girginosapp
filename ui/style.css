@@ -54,6 +54,15 @@ html, body {
 
 svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 
+/* Tema (açık/koyu) değişince renkler sert atlamaz, yumuşakça geçer. Yalnızca
+   büyük yüzeyler ve kartlar; küçük kontroller kendi --gecis'ini kullanır. */
+html, body, #panel, #panelBaslik, .ayar-kart, .ayar-sekmeler, .istatistik .kutu, .ayar, .ayar-grup > .ayar {
+  transition: background-color .28s ease, color .28s ease, border-color .28s ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  html, body, #panel, #panelBaslik, .ayar-kart, .ayar-sekmeler, .istatistik .kutu, .ayar { transition: none; }
+}
+
 /* ---------- Başlık çubuğu + sekmeler ---------- */
 
 /* Başlık çubuğu araç çubuğundan KOYU olmalı: aktif sekme araç çubuğuyla aynı
@@ -308,6 +317,16 @@ svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width:
 }
 #btnKalkan { position: relative; }
 
+/* VPN açıkken araç çubuğu ikonu yeşil yanar: hem bağlantı sürüyor sinyali,
+   hem de o ikonun VPN olduğu anlaşılsın. Koyu temada da okunur (rgba). */
+#btnVpn { transition: background var(--gecis), color var(--gecis), box-shadow var(--gecis); }
+#btnVpn.vpn-acik {
+  color: #17a35a;
+  background: rgba(31, 184, 102, .16);
+  box-shadow: 0 0 0 1px rgba(31, 184, 102, .38), 0 0 10px rgba(31, 184, 102, .35);
+}
+#btnVpn.vpn-acik:hover:not(:disabled) { background: rgba(31, 184, 102, .26); color: #17a35a; }
+
 @media (prefers-color-scheme: dark) {
   #btnKalkan.acik {
     color: #4fd6a0;
@@ -482,8 +501,15 @@ svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width:
   flex-direction: column;
   background: var(--zemin);
   z-index: 20;
+  animation: panel-gir .22s cubic-bezier(.2, .8, .2, 1);
 }
 #panel[hidden] { display: none; }
+/* Panel açılışı: yumuşak belirme + hafif yükselme. */
+@keyframes panel-gir {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) { #panel { animation: none; } }
 
 #panelBaslik {
   display: flex; align-items: center; gap: 12px;
@@ -718,9 +744,12 @@ svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width:
 }
 .menu-alt-dugme:hover { background: var(--zemin2); }
 
-/* ---------- Ayarlar (yeniden) ---------- */
+/* ---------- Ayarlar (tasarım: kutu yapısı, özel kontroller) ----------
+   Hiçbir kontrol tarayıcı varsayılanı değil: select özel ok ile, onay kutusu
+   kaydırmalı anahtar, metin alanı ve düğmeler aynı yükseklik/yarıçap/odak
+   halkasıyla. Geçişler --gecis; hareket azaltma tercihine saygı duyulur. */
 
-.ayar-grup { max-width: 860px; margin: 0 auto; }
+.ayar-grup { max-width: 980px; margin: 0 auto; }
 
 .ayar-grup h2 {
   margin: 26px 0 8px;
@@ -730,74 +759,118 @@ svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width:
 }
 .ayar-grup h2:first-of-type { margin-top: 18px; }
 
+/* Ardışık satırlar tek kart (ayarKartla ile sarılır). */
+.ayar-kart {
+  border: 1px solid var(--cizgi); border-radius: 14px;
+  background: var(--kart);
+  box-shadow: 0 1px 2px rgba(16, 20, 30, .04), 0 8px 24px -18px rgba(16, 20, 30, .25);
+  overflow: hidden;
+  margin: 0 0 12px;
+}
 .ayar {
   display: flex; align-items: center; gap: 18px;
   padding: 13px 16px;
-  border: 1px solid var(--cizgi);
-  background: var(--kart);
-  margin: 0 0 -1px 0;
-  border-radius: 0;
+  border: 0; border-top: 1px solid var(--cizgi);
+  background: transparent;
+  transition: background var(--gecis);
 }
-/* Ardışık ayar satırları tek bir kart gibi görünsün. */
-.ayar:first-of-type, .ayar-grup h2 + .ayar { border-radius: 12px 12px 0 0; }
-.ayar:last-child { border-radius: 0 0 12px 12px; margin-bottom: 8px; }
-.ayar:has(+ h2) { border-radius: 0 0 12px 12px; margin-bottom: 8px; }
-.ayar-grup h2 + .ayar:last-child, .ayar-grup h2 + .ayar:has(+ h2) { border-radius: 12px; }
+.ayar-kart .ayar:first-child { border-top: 0; }
+.ayar:hover { background: color-mix(in srgb, var(--zemin2) 55%, transparent); }
+/* Kart dışında kalan tekil satır (istisna) yine kart gibi görünsün. */
+.ayar-grup > .ayar, .ayar-bolum > .ayar { border: 1px solid var(--cizgi); border-radius: 14px; background: var(--kart); margin-bottom: 12px; }
 
 .ayar .a-metin { flex: 1; min-width: 0; }
-.ayar .a-ad { font-size: 13px; }
+.ayar .a-ad { font-size: 13px; font-weight: 600; }
 .ayar .a-aciklama { color: var(--metin2); font-size: 11.5px; margin-top: 3px; line-height: 1.4; }
-/* Reddedilen ayar uyarisi: sessizce yok sayilan bir deger kullaniciyi
-   korundugunu sanarak birakirdi. */
-/* Uyari satiri .ayar-grup'un DOGRUDAN cocugu; ".ayar .a-uyari" hicbir zaman
-   eslesmiyordu, yani reddedilen ayar uyarisi normal aciklama gibi gorunuyordu.
-   Tam bu hata sinifi icin yazilmis muhafiz da yanlis gecmisti. */
 /* Onbellek dugmesinin gecici durumlari: islem bittigini gormek gerekiyor. */
 .ikon.calisiyor { opacity: .5; }
 .ikon.tamam { color: var(--vurgu); background: var(--vurgu-yumusak); }
 
-.ayar-grup > .a-uyari {
+/* Reddedilen ayar uyarısı (kartların arasında kendi satırı). */
+.ayar-grup .a-uyari, .ayar-bolum .a-uyari {
   color: var(--tehlike);
   font-size: 11.5px;
   line-height: 1.4;
-  margin: 6px 2px 12px;
+  margin: -4px 2px 12px 6px;
 }
 
-.ayar select, .ayar input[type="text"] {
-  flex: 0 0 auto;
-  padding: 7px 10px;
-  border: 1px solid var(--cizgi); border-radius: 8px;
+/* --- Kontroller: ortak boy/yarıçap/odak halkası --- */
+.ayar select, .ayar input[type="text"], .dugme {
+  height: 34px; box-sizing: border-box;
+  border: 1px solid var(--cizgi); border-radius: 10px;
   background: var(--zemin); color: var(--metin);
   font: inherit; font-size: 12.5px; outline: none;
+  transition: border-color var(--gecis), box-shadow var(--gecis), background var(--gecis), color var(--gecis), transform var(--gecis);
 }
-.ayar select { min-width: 170px; }
+.ayar select, .ayar input[type="text"] { flex: 0 0 auto; padding: 0 12px; }
+.ayar select {
+  min-width: 180px;
+  appearance: none; -webkit-appearance: none;
+  padding-right: 34px; cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M4 6l4 4 4-4' fill='none' stroke='%238a8f9a' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 11px center; background-size: 14px;
+}
 .ayar input[type="text"] { user-select: text; min-width: 260px; }
-.ayar input[type="text"]:focus, .ayar select:focus { border-color: var(--vurgu); }
-.ayar input[type="checkbox"] { flex: 0 0 auto; width: 18px; height: 18px; accent-color: var(--vurgu); }
+.ayar input[type="text"]::placeholder { color: var(--metin2); opacity: .8; }
+.ayar select:hover, .ayar input[type="text"]:hover { border-color: var(--cizgi-guclu); }
+.ayar input[type="text"]:focus, .ayar select:focus { border-color: var(--vurgu); box-shadow: 0 0 0 3px var(--vurgu-yumusak); }
+.ayar select:disabled, .ayar input[type="text"]:disabled { opacity: .5; cursor: default; }
 
+/* Kaydırmalı anahtar (gerçek checkbox içeride, görünmez) */
+.anahtar { position: relative; display: inline-block; flex: 0 0 auto; width: 42px; height: 24px; cursor: pointer; }
+.anahtar input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.anahtar-yuva {
+  position: absolute; inset: 0; border-radius: 24px;
+  background: var(--cizgi-guclu);
+  transition: background var(--gecis), box-shadow var(--gecis);
+}
+.anahtar-yuva::after {
+  content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .3);
+  transition: transform .22s cubic-bezier(.2, .8, .2, 1);
+}
+.anahtar input:checked + .anahtar-yuva { background: var(--vurgu); }
+.anahtar input:checked + .anahtar-yuva::after { transform: translateX(18px); }
+.anahtar input:focus-visible + .anahtar-yuva { box-shadow: 0 0 0 3px var(--vurgu-yumusak); }
+.anahtar input:disabled + .anahtar-yuva { opacity: .5; }
+.anahtar:hover .anahtar-yuva { filter: brightness(1.06); }
+
+/* Düğmeler */
 .dugme {
   flex: 0 0 auto;
-  padding: 7px 14px;
-  border: 1px solid var(--cizgi); border-radius: 8px;
-  background: var(--zemin); color: var(--metin);
-  font: inherit; font-size: 12.5px; cursor: default;
-  white-space: nowrap;
+  padding: 0 16px;
+  font-weight: 600; cursor: default; white-space: nowrap;
+  background: linear-gradient(180deg, var(--kart), var(--zemin));
+  box-shadow: 0 1px 2px rgba(16, 20, 30, .06);
 }
-.dugme:hover:not(:disabled) { border-color: var(--vurgu); color: var(--vurgu); }
+.dugme:hover:not(:disabled) { border-color: var(--vurgu); color: var(--vurgu); background: var(--vurgu-yumusak); transform: translateY(-1px); }
+.dugme:active:not(:disabled) { transform: translateY(0); }
+.dugme:focus-visible { border-color: var(--vurgu); box-shadow: 0 0 0 3px var(--vurgu-yumusak); }
 .dugme:disabled { opacity: .5; }
 
+/* İstatistik kutuları */
 .istatistik {
-  display: flex; gap: 10px;
-  max-width: 860px; margin: 4px auto 0;
+  display: flex; gap: 12px;
+  max-width: 980px; margin: 4px auto 0;
 }
 .istatistik .kutu {
   flex: 1 1 0;
-  padding: 16px 12px;
-  border: 1px solid var(--cizgi); border-radius: 12px;
+  position: relative;
+  padding: 18px 12px 16px;
+  border: 1px solid var(--cizgi); border-radius: 14px;
   background: var(--kart);
   text-align: center;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(16, 20, 30, .04), 0 8px 24px -18px rgba(16, 20, 30, .25);
+  transition: transform var(--gecis), box-shadow var(--gecis);
 }
-.istatistik .sayi { font-size: 24px; font-weight: 600; color: var(--vurgu); font-variant-numeric: tabular-nums; }
+.istatistik .kutu::before {
+  content: ''; position: absolute; left: 0; right: 0; top: 0; height: 3px;
+  background: linear-gradient(90deg, var(--vurgu), transparent);
+  opacity: .9;
+}
+.istatistik .kutu:hover { transform: translateY(-2px); box-shadow: 0 10px 28px -16px rgba(16, 20, 30, .4); }
+.istatistik .sayi { font-size: 26px; font-weight: 700; color: var(--vurgu); font-variant-numeric: tabular-nums; letter-spacing: -.01em; }
 .istatistik .etiket { color: var(--metin2); font-size: 11.5px; margin-top: 4px; }
 
 /* ---------- Sağdan sola diller (Arapça) ---------- */
@@ -975,42 +1048,74 @@ svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width:
   #gncIlerleme[data-durum="kontrol"] > div { animation: none; }
 }
 
-/* ---------- Ayarlar sekmeleri ---------- */
+/* ---------- Ayarlar sekmeleri: DİKEY kenar çubuğu ---------- */
+
+.ayar-duzen {
+  display: grid;
+  grid-template-columns: 208px minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+  margin-top: 16px;
+}
 
 .ayar-sekmeler {
-  display: flex;
-  gap: 2px;
-  margin: 4px 0 14px;
-  padding-bottom: 2px;
-  border-bottom: 1px solid var(--cizgi);
-  overflow-x: auto;
-  scrollbar-width: none;
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 8px;
+  border: 1px solid var(--cizgi); border-radius: 14px;
+  background: var(--kart);
+  box-shadow: 0 1px 2px rgba(16, 20, 30, .04), 0 8px 24px -18px rgba(16, 20, 30, .25);
+  position: sticky; top: 6px;
 }
-.ayar-sekmeler::-webkit-scrollbar { display: none; }
 
 .ayar-sekme {
-  flex: 0 0 auto;
-  padding: 8px 14px;
-  border: 0;
-  border-bottom: 2px solid transparent;
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 11px;
+  border: 0; border-radius: 10px;
   background: transparent;
   color: var(--metin2);
-  font: inherit; font-size: 12.5px; font-weight: 500;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: color var(--gecis), border-color var(--gecis);
+  font: inherit; font-size: 13px; font-weight: 500;
+  cursor: pointer; text-align: start; white-space: nowrap;
+  transition: background var(--gecis), color var(--gecis), transform var(--gecis);
 }
-.ayar-sekme:hover { color: var(--metin); }
+.ayar-sekme:hover { background: var(--zemin2); color: var(--metin); }
+.ayar-sekme:active { transform: scale(.985); }
 .ayar-sekme.etkin {
+  background: var(--vurgu-yumusak);
   color: var(--vurgu);
-  border-bottom-color: var(--vurgu);
   font-weight: 600;
+  box-shadow: inset 3px 0 0 var(--vurgu);
 }
 .ayar-sekme:focus-visible { outline: 2px solid var(--vurgu); outline-offset: -2px; }
+.ayar-sekme-ikon { display: inline-flex; flex: 0 0 18px; width: 18px; height: 18px; opacity: .85; }
+.ayar-sekme.etkin .ayar-sekme-ikon { opacity: 1; }
+.ayar-sekme-ikon svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.ayar-sekme-ad { overflow: hidden; text-overflow: ellipsis; }
 
+.ayar-govde { min-width: 0; }
+.ayar-bolum-baslik { margin: 2px 0 12px 4px; font-size: 17px; font-weight: 700; letter-spacing: -.01em; }
+
+/* Bölüm değişince içerik yumuşakça belirir (aşağıdan hafif kayarak). */
+.ayar-bolum { animation: bolum-gir .26s cubic-bezier(.2, .8, .2, 1); }
 .ayar-bolum[hidden] { display: none; }
+@keyframes bolum-gir {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: none; }
+}
 /* Sekmeye ayrildiktan sonra bolum basliklari gereksiz; sekme adi zaten o. */
 .ayar-bolum > h2:first-child { display: none; }
+
+/* Dar pencerede kenar çubuğu üstte yatay şerit olur. */
+@media (max-width: 760px) {
+  .ayar-duzen { grid-template-columns: 1fr; gap: 12px; }
+  .ayar-sekmeler { flex-direction: row; overflow-x: auto; position: static; scrollbar-width: none; }
+  .ayar-sekmeler::-webkit-scrollbar { display: none; }
+  .ayar-sekme { flex: 0 0 auto; }
+  .ayar-sekme.etkin { box-shadow: inset 0 -3px 0 var(--vurgu); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ayar-bolum { animation: none; }
+  .ayar-sekme, .dugme, .istatistik .kutu { transition: none; }
+}
 
 /* Site izin ekrani */
 .izin-site-baslik {

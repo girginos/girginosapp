@@ -274,6 +274,12 @@ function aracCiz() {
     ? cev('arac.kalkanAcik', { n: t ? t.engellenen : 0 })
     : cev('arac.kalkanKapali');
 
+  // VPN açıkken araç çubuğu ikonu yeşil yanar: bağlantının sürdüğü ve o
+  // ikonun VPN olduğu bir bakışta anlaşılsın (durum her yayında tazelenir).
+  const vpnAcik = !!durum.ayarlar.vpnAcik;
+  el.vpn.classList.toggle('vpn-acik', vpnAcik);
+  el.vpn.title = vpnAcik ? cev('arac.vpnAcik') : cev('arac.vpn');
+
   // Genel reklam engelleyici düğmesi: SİTE bazlı kalkandan farklı olarak
   // store.ayarlar.engelleyiciAcik'ı yansıtır (tüm siteler).
   const genelAcik = !!durum.ayarlar.engelleyiciAcik;
@@ -1135,12 +1141,22 @@ function ayarSatiri(ad, aciklama, kontrol) {
   return d;
 }
 
+/*
+ * Aç/kapa anahtarı: tarayıcı varsayılanı onay kutusu yerine kaydırmalı
+ * anahtar. Gerçek <input type=checkbox> içeride kalır (erişilebilirlik,
+ * klavye, testler); görüntüyü .anahtar-yuva çizer.
+ */
 function anahtar(deger, degisti) {
+  const l = document.createElement('label');
+  l.className = 'anahtar';
   const k = document.createElement('input');
   k.type = 'checkbox';
   k.checked = !!deger;
   k.addEventListener('change', () => degisti(k.checked));
-  return k;
+  const yuva = document.createElement('span');
+  yuva.className = 'anahtar-yuva';
+  l.append(k, yuva);
+  return l;
 }
 
 function listeSatiri(l) {
@@ -1191,6 +1207,37 @@ function dugmeDurum(dugme, gecici, eski, sure = 1500) {
  */
 let aktifAyarSekmesi = 0;
 
+// Bölüm anahtarına göre sekme ikonu (16x16, çizgi). Bilinmeyen bölüm: nokta.
+const AYAR_SEKME_IKON = {
+  'ayar.bolumArama': '<circle cx="7" cy="7" r="4.5"/><path d="M10.5 10.5 14 14"/>',
+  'ayar.bolumGizlilik': '<path d="M8 1.6l5 2v3.6c0 3.2-2.1 5.6-5 6.8-2.9-1.2-5-3.6-5-6.8V3.6z"/>',
+  'ayar.bolumVekil': '<circle cx="8" cy="8" r="6"/><path d="M2 8h12M8 2c2.5 3 2.5 9 0 12M8 2c-2.5 3-2.5 9 0 12"/>',
+  'ayar.bolumListeler': '<path d="M3 4h10M3 8h10M3 12h7"/>',
+  'ayar.bolumIzinler': '<rect x="3" y="7" width="10" height="7" rx="1.5"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/>',
+  'ayar.bolumGuncelleme': '<path d="M13 8a5 5 0 0 1-8.7 3.4M3 8a5 5 0 0 1 8.7-3.4M11.7 2v2.6H9.1M4.3 14v-2.6h2.6"/>',
+  'ayar.bolumGorunum': '<circle cx="8" cy="8" r="3"/><path d="M8 1.5v1.8M8 12.7v1.8M1.5 8h1.8M12.7 8h1.8M3.4 3.4l1.3 1.3M11.3 11.3l1.3 1.3M3.4 12.6l1.3-1.3M11.3 4.7l1.3-1.3"/>'
+};
+
+/*
+ * Ardışık .ayar satırlarını tek karta toplar; aradaki uyarı/ilerleme gibi
+ * öğeler kartı böler ve kendi başına kalır. Böylece satır köşe yuvarlaması
+ * kırılgan :has()/:first-of-type kurallarına değil, açık bir kaba dayanır.
+ */
+function ayarKartla(ogeler) {
+  const cikti = [];
+  let kart = null;
+  for (const o of ogeler) {
+    if (o.classList && o.classList.contains('ayar')) {
+      if (!kart) { kart = document.createElement('div'); kart.className = 'ayar-kart'; cikti.push(kart); }
+      kart.appendChild(o);
+    } else {
+      kart = null;
+      cikti.push(o);
+    }
+  }
+  return cikti;
+}
+
 function ayarlariSekmele(g) {
   const cocuklar = [...g.children];
   const oncesi = [];
@@ -1199,7 +1246,7 @@ function ayarlariSekmele(g) {
 
   for (const c of cocuklar) {
     if (c.tagName === 'H2') {
-      simdiki = { ad: c.textContent, ogeler: [] };
+      simdiki = { ad: c.textContent, anahtar: c.dataset.anahtar || '', ogeler: [] };
       bolumler.push(simdiki);
     } else if (simdiki) {
       simdiki.ogeler.push(c);
@@ -1212,26 +1259,43 @@ function ayarlariSekmele(g) {
   g.replaceChildren(...oncesi);
   if (aktifAyarSekmesi >= bolumler.length) aktifAyarSekmesi = 0;
 
+  // Dikey düzen: solda sekme listesi (yapışkan), sağda etkin bölümün gövdesi.
+  const duzen = document.createElement('div');
+  duzen.className = 'ayar-duzen';
   const serit = document.createElement('nav');
   serit.className = 'ayar-sekmeler';
   serit.setAttribute('role', 'tablist');
-  g.appendChild(serit);
+  serit.setAttribute('aria-orientation', 'vertical');
+  const govde = document.createElement('div');
+  govde.className = 'ayar-govde';
+  duzen.append(serit, govde);
+  g.appendChild(duzen);
 
   const kutular = bolumler.map((b, i) => {
     const d = document.createElement('div');
     d.className = 'ayar-bolum';
     d.hidden = i !== aktifAyarSekmesi;
-    d.append(...b.ogeler);
-    g.appendChild(d);
+    const h = document.createElement('h3');
+    h.className = 'ayar-bolum-baslik';
+    h.textContent = b.ad;
+    d.append(h, ...ayarKartla(b.ogeler));
+    govde.appendChild(d);
     return d;
   });
 
   bolumler.forEach((b, i) => {
     const dugme = document.createElement('button');
     dugme.className = 'ayar-sekme' + (i === aktifAyarSekmesi ? ' etkin' : '');
-    dugme.textContent = b.ad;
     dugme.setAttribute('role', 'tab');
     dugme.setAttribute('aria-selected', i === aktifAyarSekmesi ? 'true' : 'false');
+    const ikon = document.createElement('span');
+    ikon.className = 'ayar-sekme-ikon';
+    ikon.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true">'
+      + (AYAR_SEKME_IKON[b.anahtar] || '<circle cx="8" cy="8" r="2.5"/>') + '</svg>';
+    const ad = document.createElement('span');
+    ad.className = 'ayar-sekme-ad';
+    ad.textContent = b.ad;
+    dugme.append(ikon, ad);
     dugme.addEventListener('click', () => {
       aktifAyarSekmesi = i;
       kutular.forEach((k, j) => { k.hidden = j !== i; });
@@ -1322,6 +1386,7 @@ function ayarlarPaneli() {
   const baslik = (anahtarAdi) => {
     const h = document.createElement('h2');
     h.textContent = cev(anahtarAdi);
+    h.dataset.anahtar = anahtarAdi;   // sekme ikonu bu anahtara göre seçilir
     g.appendChild(h);
   };
 

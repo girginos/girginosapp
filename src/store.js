@@ -9,7 +9,8 @@ const DEFAULTS = {
     dil: 'sistem',
     // 'sistem' | 'acik' | 'koyu' -> nativeTheme.themeSource'a aktarilir,
     // boylece ic sayfalar ve yerel menuler de birlikte doner.
-    tema: 'sistem',
+    // Varsayilan KOYU (kullanici istegi); Ayarlar > Gorunum'den degistirilir.
+    tema: 'koyu',
     aramaMotoru: 'duckduckgo',
     engelleyiciAcik: true,
     // uBlock Origin ağ motoru (SNFE). Kapatılırsa ~120 MB bellek düşer, ağ

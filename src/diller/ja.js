@@ -125,6 +125,7 @@ module.exports = {
     'panel.vpn': 'VPN',
     'panel.istatistik': 'Statistics',
     'arac.vpn': 'VPN',
+    'arac.vpnAcik': 'VPN on — traffic goes through the encrypted tunnel',
     'arac.istatistik': 'Statistics',
     'vpn.ac': 'Turn on VPN',
     'vpn.aciklama': 'Your traffic goes through an encrypted server; your real IP is hidden',

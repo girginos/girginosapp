@@ -135,6 +135,7 @@ module.exports = {
     'panel.vpn': 'VPN',
     'panel.istatistik': 'İstatistikler',
     'arac.vpn': 'VPN',
+    'arac.vpnAcik': 'VPN açık — trafik şifreli tünelden geçiyor',
     'arac.istatistik': 'İstatistikler',
     'vpn.ac': 'VPN\'i aç',
     'vpn.aciklama': 'Trafiğin şifreli sunucudan geçer, gerçek IP\'n gizlenir',
