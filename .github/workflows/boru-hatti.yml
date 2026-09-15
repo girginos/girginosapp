@@ -144,12 +144,20 @@ jobs:
         run: |
           set -o pipefail
           xvfb-run --auto-servernum npm run test-electron 2>&1 | tee electron.log
+      # Bu adım ASLA başarısız olmamalı: tanı verisi kaybolmasın. İlk sürüm
+      # grep kullanıyordu; grep eşleşme bulamayınca 1 dönüyor ve adım echo'ya
+      # varmadan ölüyordu, yani hata tam da gerekli olduğu anda kayboluyordu.
       - name: başarısızlık çıktısı
         if: failure()
+        continue-on-error: true
         run: |
-          echo "::error title=Electron kapisi::$(grep -iE 'HATA|FATAL|Error|BAŞARISIZ|failed' electron.log | tail -12 | tr '\n' ' | ' | cut -c1-900)"
-          echo '----- son 80 satır -----'
-          tail -80 electron.log
+          set +e
+          # Açıklamalarda satır sonu %0A olarak kodlanıyor, % ise kaçırılmalı.
+          ozet=$(tail -45 electron.log | sed 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g')
+          echo "::error title=Electron kapisi::${ozet}"
+          echo '----- son 120 satır -----'
+          tail -120 electron.log
+          exit 0
 
   cve:
     name: 7 · CVE / SCA
