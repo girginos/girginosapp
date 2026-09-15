@@ -349,9 +349,12 @@ func handler(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleConnect(w http.ResponseWriter, r *http.Request, ls ...*rate.Limiter) {
-	dst, err := net.DialTimeout("tcp", r.Host, 20*time.Second)
+	dst, err := guvenliDial(r.Host)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadGateway)
+		// Jenerik yanıt: hangi iç IP'nin var/kapalı olduğunu doğrulayan
+		// yan kanal olmasın (err iç adresi/portu içerebilir).
+		log.Printf("connect reddedildi %s: %v", r.Host, err)
+		http.Error(w, "502 bad gateway", http.StatusBadGateway)
 		return
 	}
 	hj, ok := w.(http.Hijacker)
@@ -378,9 +381,10 @@ func handleHTTP(w http.ResponseWriter, r *http.Request, ls ...*rate.Limiter) {
 	}
 	r.RequestURI = ""
 	stripHop(r.Header)
-	resp, err := http.DefaultTransport.RoundTrip(r)
+	resp, err := guvenliTransport.RoundTrip(r)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadGateway)
+		log.Printf("http reddedildi %s: %v", r.Host, err)
+		http.Error(w, "502 bad gateway", http.StatusBadGateway)
 		return
 	}
 	defer resp.Body.Close()
@@ -396,6 +400,7 @@ func handleHTTP(w http.ResponseWriter, r *http.Request, ls ...*rate.Limiter) {
 
 func main() {
 	loadSecret()
+	yerelIPleriTopla()   // hedef kilidi: iç aralıklar + kendi adresleri kapalı
 	go kovalariTemizle() // boşta kalan kotalar belleği şişirmesin
 	// SIGHUP: gizli anahtarı yeniden yükle (döndürülürse restart gerekmesin).
 	sig := make(chan os.Signal, 1)
@@ -419,8 +424,12 @@ func main() {
 		Addr:         ":443",
 		Handler:      http.HandlerFunc(handler),
 		TLSConfig:    tlsCfg,
-		ReadTimeout:  0,
+		ReadTimeout:  0, // CONNECT tünelleri uzun ömürlü; gövde deadline'ı yok
 		WriteTimeout: 0,
+		// Başlığı hiç tamamlamayan bağlantı (slowloris) goroutine tutmasın.
+		// Hijack başlıktan SONRA olduğu için tüneli etkilemez.
+		ReadHeaderTimeout: 10 * time.Second,
+		IdleTimeout:       90 * time.Second,
 	}
 	log.Printf("browservpn :443 dinliyor (domain %s, otomatik süreli token, limit 100 Mbps/cihaz + 100 Mbps/IP)", domain)
 	log.Fatal(srv.ListenAndServeTLS("", ""))
