@@ -293,7 +293,7 @@ func handleKayit(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "gecersiz cihaz", http.StatusBadRequest)
 		return
 	}
-	if !kayitIzni(kaynakIP(r)) {
+	if !kayitIzni(kaynakOnek(kaynakIP(r))) {
 		w.Header().Set("Retry-After", "3600")
 		http.Error(w, "kayit kotasi doldu", http.StatusTooManyRequests)
 		return
@@ -323,7 +323,13 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	// güncelleme alamıyorlardı. Yalnızca KENDİ güncelleme sunucumuza CONNECT
 	// kimliksiz geçer (açık relay değil; hedef sabit), kendi kovasıyla kısılır.
 	if r.Method == http.MethodConnect && kimliksizHedef(r.Host) {
-		handleConnect(w, r, bantLimiti("guncelleme:"+kaynakIP(r)))
+		onek := kaynakOnek(kaynakIP(r))
+		if !onekGiris(onek) {
+			http.Error(w, "429 cok fazla es zamanli baglanti", http.StatusTooManyRequests)
+			return
+		}
+		defer onekCikis(onek)
+		handleConnect(w, r, bantLimiti("guncelleme:"+onek))
 		return
 	}
 
@@ -339,8 +345,14 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	 * istediği kadar token üretebilir ama hepsi aynı IP'den aktığı için toplam
 	 * bandı yine 100 Mbps'te kalır - token çoğaltmak kazanç sağlamaz.
 	 */
+	onek := kaynakOnek(kaynakIP(r))
+	if !onekGiris(onek) {
+		http.Error(w, "429 cok fazla es zamanli baglanti", http.StatusTooManyRequests)
+		return
+	}
+	defer onekCikis(onek)
 	cihazKova := bantLimiti("cihaz:" + cihaz)
-	ipKova := bantLimiti("ip:" + kaynakIP(r))
+	ipKova := bantLimiti("ip:" + onek)
 	if r.Method == http.MethodConnect {
 		handleConnect(w, r, cihazKova, ipKova)
 		return
@@ -432,5 +444,11 @@ func main() {
 		IdleTimeout:       90 * time.Second,
 	}
 	log.Printf("browservpn :443 dinliyor (domain %s, otomatik süreli token, limit 100 Mbps/cihaz + 100 Mbps/IP)", domain)
-	log.Fatal(srv.ListenAndServeTLS("", ""))
+	ln, err := net.Listen("tcp", ":443")
+	if err != nil {
+		log.Fatalf(":443 dinlenemedi: %v", err)
+	}
+	// Küresel eşzamanlı bağlantı tavanı: fd/goroutine tükenmesine karşı.
+	ln = sinirlaDinleyici(ln, kureselTavan)
+	log.Fatal(srv.ServeTLS(ln, "", ""))
 }
