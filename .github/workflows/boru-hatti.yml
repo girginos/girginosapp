@@ -117,7 +117,26 @@ jobs:
           sudo apt-get install -y xvfb libnss3 libatk1.0-0 libatk-bridge2.0-0 \
             libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 \
             libxfixes3 libxrandr2 libgbm1 libasound2
-      - run: xvfb-run --auto-servernum npm run test-electron
+      # Ortam tanısı: kırmızıda neyin eksik olduğu günlüğe bakmadan anlaşılsın.
+      - name: ortam
+        run: |
+          echo "çekirdek: $(uname -r)"
+          echo "apparmor userns kısıtı: $(cat /proc/sys/kernel/apparmor_restrict_unprivileged_userns 2>/dev/null || echo yok)"
+          echo "electron ikilisi: $(node -e 'console.log(require("electron"))')"
+      # Çıktı dosyaya alınıp başarısızlıkta ::error:: olarak yazdırılıyor.
+      # İş günlükleri yalnızca kimlik doğrulamayla okunabiliyor; açıklamalar
+      # (annotations) herkese açık API'den görülebiliyor - böylece kırmızı bir
+      # koşunun sebebi dışarıdan da anlaşılır.
+      - name: Electron testleri
+        run: |
+          set -o pipefail
+          xvfb-run --auto-servernum npm run test-electron 2>&1 | tee electron.log
+      - name: başarısızlık çıktısı
+        if: failure()
+        run: |
+          echo "::error title=Electron kapisi::$(grep -iE 'HATA|FATAL|Error|BAŞARISIZ|failed' electron.log | tail -12 | tr '\n' ' | ' | cut -c1-900)"
+          echo '----- son 80 satır -----'
+          tail -80 electron.log
 
   cve:
     name: 7 · CVE / SCA
