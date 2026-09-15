@@ -77,12 +77,6 @@ let panelArama = null;
 
 /* ---------------- yardımcılar ---------------- */
 
-function kacir(s) {
-  return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => (
-    { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
-  ));
-}
-
 // Yön değiştirme ve kontrol karakterleri XSS değil ama sekme başlığında,
 // öneri listesinde ve indirme adında metni ters okutmaya yarıyor.
 const GORUNMEZ = /[\u0000-\u001F\u007F-\u009F\u200B-\u200F\u061C\u202A-\u202E\u2066-\u2069\uFEFF]/g;
@@ -178,7 +172,14 @@ const SIMGE = {
   ara: '<svg viewBox="0 0 16 16"><circle cx="7.1" cy="7.1" r="4.3"/>'
     + '<path d="M10.3 10.3 13.5 13.5"/></svg>',
   dunya: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.6"/><path d="M2.4 8h11.2"/>'
-    + '<path d="M8 2.4c1.5 1.7 2.3 3.5 2.3 5.6S9.5 11.9 8 13.6C6.5 11.9 5.7 10.1 5.7 8S6.5 4.1 8 2.4z"/></svg>'
+    + '<path d="M8 2.4c1.5 1.7 2.3 3.5 2.3 5.6S9.5 11.9 8 13.6C6.5 11.9 5.7 10.1 5.7 8S6.5 4.1 8 2.4z"/></svg>',
+  /*
+   * Marka işareti (pusula): yeni sekme sayfasındaki logonun 16px'e indirilmiş
+   * hâli. Sekme şeridinde uygulamanın KENDİ sayfasını temsil ediyor -
+   * tarayıcılar iç sayfaları için kendi simgelerini gösterir, boş kutu değil.
+   */
+  pusula: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.8"/>'
+    + '<path d="M10.4 5.6l-1.68 3.28L5.44 10.4l1.68-3.28z" fill="currentColor" stroke="none"/></svg>'
 };
 
 // Panel içeriklerini ortalanmış bir kart içine alır.
@@ -226,10 +227,13 @@ function sekmeleriCiz() {
       i.className = 'favikon';
       i.src = t.favicon;
       i.alt = '';
-      i.addEventListener('error', () => { i.replaceWith(yerTutucu()); });
+      // Simge inmediyse gri kutuya değil, sitenin ne olduğunu anlatan
+      // dünya simgesine düşüyoruz.
+      i.addEventListener('error', () => { i.replaceWith(sekmeSimgesi(!t.gorunenUrl)); });
       d.appendChild(i);
     } else {
-      d.appendChild(yerTutucu());
+      // gorunenUrl boşsa bu bir iç sayfa (yeni sekme): marka simgesi.
+      d.appendChild(sekmeSimgesi(!t.gorunenUrl));
     }
 
     const ad = document.createElement('span');
@@ -312,10 +316,21 @@ function sekmeSuruklemeKur(d) {
   });
 }
 
-function yerTutucu() {
-  const p = document.createElement('div');
-  p.className = 'yer-tutucu';
-  return p;
+/*
+ * Favicon'u olmayan sekmenin simgesi.
+ *
+ * Eskiden burada düz gri bir kutu vardı; yeni sekme açıldığında sekme şeridi
+ * boş bir kareyle başlıyordu. İki ayrı durum var ve ikisi farklı şey anlatır:
+ *   - iç sayfa / yeni sekme (adres yok) -> uygulamanın kendi markası (pusula)
+ *   - gerçek bir site ama simgesi yok   -> dünya
+ * Gri kutu artık yalnızca yükleme sırasındaki kısa boşluk için değil, hiç
+ * kullanılmıyor: her durumun kendi anlamı var.
+ */
+function sekmeSimgesi(icSayfa) {
+  const d = document.createElement('div');
+  d.className = 'sekme-simge' + (icSayfa ? ' marka' : '');
+  d.innerHTML = icSayfa ? SIMGE.pusula : SIMGE.dunya;
+  return d;
 }
 
 function aracCiz() {
@@ -960,7 +975,6 @@ function panelCiz() {
  * genel varsayılanı izlemeye döner; hangi varsayılanın geçerli olduğu her
  * satırda yazıyor ki kullanıcı neyi değiştirdiğini görsün.
  */
-let siteIzinOrigin = '';
 let siteIzinVeri = null;
 
 async function siteIzinleriPaneli() {
@@ -1015,7 +1029,6 @@ async function siteIzinleriPaneli() {
 }
 
 async function siteIzinleriAc(origin) {
-  siteIzinOrigin = origin;
   siteIzinVeri = await window.pusula.izinSiteOku(origin);
   panelAc('siteIzinleri');
 }

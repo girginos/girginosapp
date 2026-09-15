@@ -904,7 +904,7 @@ esit('her kayıt geçerli alan adı biçiminde', LISTE.filter(d => !ALAN_BICIMI.
 
 /* ---- scriptlet (uBO "+js") motoru ---- */
 {
-  const { betikCoz, BetikDepo, imza, kanonik, argümanlarıBöl, anaDunyaKodu } = betikler;
+  const { betikCoz, BetikDepo, kanonik, argümanlarıBöl, anaDunyaKodu } = betikler;
 
   // Ayrıştırma
   const k = betikCoz('blackhatworld.com##+js(acs, navigator.userAgent, AdBlockOn)');

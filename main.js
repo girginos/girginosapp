@@ -2,7 +2,7 @@
 
 const {
   app, BrowserWindow, WebContentsView, ipcMain, shell, session,
-  dialog, Menu, clipboard, nativeTheme, protocol, webFrameMain, net, safeStorage
+  dialog, Menu, clipboard, nativeTheme, protocol, webFrameMain, safeStorage
 } = require('electron');
 const path = require('node:path');
 
@@ -2742,17 +2742,17 @@ function ipcKur() {
      * Kullanıcı vazgeçerse ayarı geri alıyoruz - yoksa "açık" görünüp
      * hiçbir şey şifrelemeyen sahte bir güvenlik olurdu.
      */
-    if (p.anahtar === anaParolaAcik) {
+    if (p.anahtar === 'anaParolaAcik') {
       if (p.deger) {
-        anaParolaSor({ kip: kur }).then((anahtar) => {
+        anaParolaSor({ kip: 'kur' }).then((anahtar) => {
           if (anahtar) { anaParolaAnahtari = anahtar; }
-          else { store.ayarla(anaParolaAcik, false); durumGonder(); }
+          else { store.ayarla('anaParolaAcik', false); durumGonder(); }
         });
       } else {
         anaParolaAnahtari = null;
       }
     }
-    if (p.anahtar === vpnAcik || p.anahtar === vpnLokasyon) {
+    if (p.anahtar === 'vpnAcik' || p.anahtar === 'vpnLokasyon') {
       vekiliUygula();
       const sv = aktifSekme();
       if (sv && !sv.view.webContents.isDestroyed()) sv.view.webContents.reload();

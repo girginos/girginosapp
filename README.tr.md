@@ -241,6 +241,39 @@ Kabuk tarafında **kalan boşluklar**, dürüstlük gereği:
 - **Sertifika hatası akışı Chromium varsayılanında.** Kullanıcıya özel bir
   "yine de devam et" ekranı yazılmadı; hatalı sertifikada sayfa açılmıyor.
 
+## Yayın boru hattı
+
+On bir kapı, bu sırayla; ucuz ve kesin olan önce:
+
+```
+Commit → Lint → Statik → Race → Birim → Bütünleşme → CVE/SCA → Derleme → E2E → Duman → Yük
+```
+
+Zincirin tamamını yerelde çalıştırmak için:
+
+```bash
+npm run boru-hatti            # kurulum paketi hariç her şey
+npm run boru-hatti -- --hizli # yalnızca ucuz kapılar
+npm run boru-hatti -- --derleme
+```
+
+Aynı kapılar CI'da da koşuyor (`.github/workflows/boru-hatti.yml`). Yerelde
+çalıştırılamayan bir kapı (ör. Go kurulu değilse) GEÇTİ değil **ATLANDI** diye
+raporlanır.
+
+| Kapı | Neyi koruyor |
+|---|---|
+| Commit | `scripts/sizinti-tara.js` — bu depo herkese açık; sızan anahtar geri alınamaz. Sahte sır ekleyerek kontrol kolu çalıştırılıyor. |
+| Lint | `eslint .` — tanımsız değişken ve ölü kod. İlk çalıştırmasında gerçek bir hata buldu: string olması gereken yerde çıplak `anaParolaAcik`, her ayar değişikliğinde `ReferenceError` fırlatıyordu. |
+| Statik | `test/sozlesme.js` — arayüz ile ana süreç arasında IPC kanalı, DOM kimliği ve CSS sınıfı eşleşmesi; ayrıca `go vet`. |
+| Race | `sunucu/` üzerinde `go test -race` — kovalar ve HMAC anahtarı aynı anda birçok goroutine'den kullanılıyor. |
+| Birim | `npm test` — 420+ saf test, Electron gerekmez. |
+| Bütünleşme / E2E | `npm run test-electron` — gerçek Electron, gerçek profil, gerçek gezinme. |
+| CVE/SCA | `scripts/cve-tara.js` — `npm audit` ve `go.sum`'daki her Go modülü için OSV (dolaylı bağımlılıklar dahil). Kabul edilen uyarıların gerekçesi yazılı ve gerekçe her koşuda yeniden doğrulanıyor. |
+| Derleme | electron-builder, signtool ile imzalı. Ed25519 yayın anahtarı bilerek CI sırrı **değil**: manifest çevrimdışı imzalanıyor. |
+| Duman | `npm run canli-dogrula` — yayındaki manifest, imza ve paket birbirini tutuyor mu. |
+| Yük | `test/yuk.js` — uBO motoru her isteğin önünde; oradaki yavaşlama sessizdir. Hiçbir şeye eşleşmeyen bir motorun hızlı görünmemesi için kontrol kolu var. |
+
 ## Bilinen sınırlar
 
 - **Güncelleme varsayılan olarak kapalı.** Mekanizma hazır ama yayın anahtarı ve

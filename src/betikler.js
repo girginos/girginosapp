@@ -616,7 +616,6 @@ function yardımcıFabrika() {
     },
     // DOM üstünde bir işi tekrar tekrar çalıştır: yükleme + mutasyon + birkaç zaman.
     periyodik: function (iş, davranış) {
-      var self = this;
       var çalış = function () { try { iş(); } catch (e) { /* geç */ } };
       var başla = function () {
         çalış();
@@ -955,6 +954,9 @@ function anaDunyaKurulumKodu() {
     if (!/^https?:$/.test(location.protocol)) return;
     if (!eslesmeler || !eslesmeler.length) return;
     var H = window.__pusulaBetikH();
+    // Gövde toString() ile metne çevrilip aşağıdaki .replace() bu satırı
+    // gerçek kütüphaneyle değiştiriyor; olduğu hâliyle hiç çalışmıyor.
+    // eslint-disable-next-line no-undef
     var LIB = kütüphaneMetni;   // yer tutucu; codegen gerçek nesneyle değiştirir
     for (var i = 0; i < eslesmeler.length; i++) {
       var ad = eslesmeler[i][0];

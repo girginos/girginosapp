@@ -10,7 +10,6 @@
  */
 
 const https = require('node:https');
-const path = require('node:path');
 
 
 const { manifestDogrula, SEBEPLER } = require('../src/guncelleme-dogrula');

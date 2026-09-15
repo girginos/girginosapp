@@ -17,11 +17,20 @@
     "paket-dizin": "electron-builder --dir",
     "manifest-imzala": "node scripts/manifest-imzala.js",
     "yayin-dogrula": "node scripts/yayin-dogrula.js",
-    "canli-dogrula": "node scripts/canli-dogrula.js"
+    "canli-dogrula": "node scripts/canli-dogrula.js",
+    "lint": "eslint .",
+    "kapi:sizinti": "node scripts/sizinti-tara.js",
+    "kapi:statik": "node test/sozlesme.js",
+    "kapi:cve": "node scripts/cve-tara.js",
+    "kapi:yuk": "node test/yuk.js",
+    "kapi:duman": "node scripts/canli-dogrula.js",
+    "boru-hatti": "node scripts/boru-hatti.js"
   },
   "devDependencies": {
     "electron": "^44.2.0",
-    "electron-builder": "^26.15.3"
+    "electron-builder": "^26.15.3",
+    "eslint": "^9.39.5",
+    "globals": "^17.12.0"
   },
   "dependencies": {
     "@gorhill/ubo-core": "^0.1.30",

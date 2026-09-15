@@ -52,7 +52,7 @@ function ortamKur() {
 
 // 3) chrome GEÇ atanırsa (set tuzağı) yeni webstorePrivate de körlenir.
 {
-  const { win, sayac } = ortamKur();
+  const { win } = ortamKur();
   win.chrome = { webstorePrivate: { getReferrerChain: function () { throw new Error('çökme!'); } } };
   let patladi = false;
   try { win.chrome.webstorePrivate.getReferrerChain(function () {}); }

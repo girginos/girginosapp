@@ -272,6 +272,39 @@ The **remaining gaps** on the shell side, stated honestly:
 - **Certificate error flow is Chromium's default.** No custom "continue anyway"
   screen was written; on a bad certificate the page simply does not open.
 
+## Release pipeline
+
+Eleven gates, in this order, cheapest and most certain first:
+
+```
+Commit → Lint → Static → Race → Unit → Integration → CVE/SCA → Build → E2E → Smoke → Load
+```
+
+Run the whole chain locally:
+
+```bash
+npm run boru-hatti            # everything except the installer build
+npm run boru-hatti -- --hizli # cheap gates only
+npm run boru-hatti -- --derleme
+```
+
+The same gates run in CI (`.github/workflows/boru-hatti.yml`). A gate that
+cannot run locally (no Go toolchain, for instance) is reported as SKIPPED, never
+as passed.
+
+| Gate | What it protects |
+|---|---|
+| Commit | `scripts/sizinti-tara.js` — this repository is public; a leaked key cannot be taken back. Planting a fake secret is used as a control arm. |
+| Lint | `eslint .` — undefined identifiers and dead code. On its first run it found a real bug: a bare `anaParolaAcik` where the string was meant, which threw a `ReferenceError` in every settings change. |
+| Static | `test/sozlesme.js` — IPC channel, DOM id and CSS class parity between the UI and the main process; plus `go vet`. |
+| Race | `go test -race` over `sunucu/` — buckets and the HMAC secret are used from many goroutines at once. |
+| Unit | `npm test` — 420+ pure tests, no Electron needed. |
+| Integration / E2E | `npm run test-electron` — real Electron, real profile, real navigation. |
+| CVE/SCA | `scripts/cve-tara.js` — `npm audit` plus OSV for every Go module in `go.sum`, indirect ones included. Accepted advisories carry a written reason, and the reason itself is re-verified on each run. |
+| Build | electron-builder, signed with signtool. The Ed25519 release key is deliberately **not** a CI secret: the manifest is signed offline. |
+| Smoke | `npm run canli-dogrula` — the live manifest, signature and package, checked against each other. |
+| Load | `test/yuk.js` — the uBO engine sits in front of every request; a slowdown there is silent. Includes a control arm so an engine that matches nothing cannot look fast. |
+
 ## Known limitations
 
 - Single window: tab state is bound to one window, so there is no "New window"

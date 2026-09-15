@@ -16,7 +16,7 @@ const fs = require('node:fs');
 const { app, session, BrowserWindow } = require('electron');
 
 const { Store } = require('../src/store');
-const { ListeYoneticisi, ayristir } = require('../src/listeler');
+const { ListeYoneticisi } = require('../src/listeler');
 const { KozmetikDepo } = require('../src/kozmetik');
 
 const PORT = 8804;

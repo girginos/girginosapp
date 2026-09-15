@@ -145,10 +145,6 @@ function degerlendiriciKodu() {
     if (d == null) return false;
     return (typeof d === 'string') ? s.indexOf(d) !== -1 : d.test(s);
   }
-  function cssUyar(el, cssArg) {
-    // ":scope " ile göreli; başında birleştirici (>,+,~) olabilir.
-    try { return el.matches(cssArg); } catch (e) { return false; }
-  }
   function altVar(el, argZinciri) {
     // argZinciri: :has() argümanının zinciri. İlk css parçası kapsam.
     if (!argZinciri || !argZinciri.length) return false;

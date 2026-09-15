@@ -172,11 +172,25 @@ body.sekme-tasiniyor .sekme { transition: none; }
   object-fit: contain;
 }
 
-.sekme .yer-tutucu {
+/*
+ * Favicon'u olmayan sekmenin simgesi. Eskiden düz gri bir kutuydu; yeni sekme
+ * açıldığında sekme boş bir kareyle başlıyordu. Artık iç sayfa marka
+ * pusulasını, simgesi olmayan site dünya simgesini gösteriyor.
+ */
+.sekme .sekme-simge {
   width: 16px; height: 16px; flex: 0 0 16px;
-  border-radius: 4px;
-  background: var(--cizgi);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--metin2);
 }
+.sekme .sekme-simge svg {
+  width: 16px; height: 16px;
+  fill: none; stroke: currentColor; stroke-width: 1.4;
+  stroke-linecap: round; stroke-linejoin: round;
+}
+/* Kendi sayfamız marka rengiyle: sekme şeridinde hemen ayırt ediliyor. */
+.sekme .sekme-simge.marka { color: var(--vurgu); }
+.sekme.aktif .sekme-simge { color: var(--metin); }
+.sekme.aktif .sekme-simge.marka { color: var(--vurgu); }
 
 .sekme .ad {
   flex: 1;

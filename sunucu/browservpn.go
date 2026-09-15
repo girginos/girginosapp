@@ -396,7 +396,7 @@ func handleHTTP(w http.ResponseWriter, r *http.Request, ls ...*rate.Limiter) {
 
 func main() {
 	loadSecret()
-	go kovalariTemizle()   // boşta kalan kotalar belleği şişirmesin
+	go kovalariTemizle() // boşta kalan kotalar belleği şişirmesin
 	// SIGHUP: gizli anahtarı yeniden yükle (döndürülürse restart gerekmesin).
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, syscall.SIGHUP)

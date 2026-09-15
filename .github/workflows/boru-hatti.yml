@@ -1,0 +1,172 @@
+name: boru-hatti
+
+# Commit → Lint → Statik → Race → Birim → Bütünleşme → CVE/SCA → Derleme →
+# E2E → Duman → Yük
+#
+# Yerel karşılığı: `npm run boru-hatti` (scripts/boru-hatti.js). İki taraf aynı
+# komutları çalıştırır; CI'da ek olarak Go ve sanal ekran (xvfb) hazır olduğu
+# için yerelde atlanan kapılar burada gerçekten koşar.
+#
+# İMZA BURADA DEĞİL: Ed25519 yayın anahtarı depo sırrı OLARAK TUTULMUYOR.
+# GitHub hesabı ele geçirilirse güncelleme zincirinin dayandığı tek anahtar da
+# ele geçmiş olurdu. Manifest çevrimdışı imzalanıyor; CI yalnızca paketi üretir.
+#
+# Duman kapısı CANLI beslemeye bakar, bu yüzden yalnızca main'de ve etiketlerde
+# çalışır: PR'larda dış ağa bağımlı kırmızı istemiyoruz.
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  schedule:
+    # CVE tarafı kod değişmese de bayatlar: haftada bir kendiliğinden koşsun.
+    - cron: '17 4 * * 1'
+
+permissions:
+  contents: read
+
+jobs:
+  commit:
+    name: 1 · Commit (sır sızıntısı)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # sızıntı taraması git ls-files kullanıyor
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: node scripts/sizinti-tara.js
+
+  lint:
+    name: 2 · Lint
+    needs: commit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm run lint
+      - name: gofmt
+        run: |
+          farkli=$(gofmt -l sunucu/)
+          if [ -n "$farkli" ]; then echo "gofmt farkı: $farkli"; gofmt -d sunucu/; exit 1; fi
+          echo "gofmt temiz"
+
+  statik:
+    name: 3 · Statik analiz
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      # Arayüz ↔ ana süreç sözleşmesi: IPC kanalı, DOM kimliği, CSS sınıfı.
+      - run: npm run kapi:statik
+      - uses: actions/setup-go@v5
+        with: { go-version: '1.23' }
+      - run: go vet ./...
+        working-directory: sunucu
+
+  race:
+    name: 4 · Race (Go)
+    needs: statik
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: '1.23' }
+      # -count=2: yarışlar tek turda her zaman görünmez.
+      - run: go test -race -count=2 -timeout 300s ./...
+        working-directory: sunucu
+
+  birim:
+    name: 5 · Birim testleri
+    needs: statik
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm test
+
+  butunlesme:
+    name: 6 · Bütünleşme + E2E (Electron)
+    needs: birim
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      # Electron'un başsız çalışması için sanal ekran ve sistem kütüphaneleri.
+      - name: sanal ekran
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb libnss3 libatk1.0-0 libatk-bridge2.0-0 \
+            libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 \
+            libxfixes3 libxrandr2 libgbm1 libasound2t64 || \
+          sudo apt-get install -y xvfb libnss3 libatk1.0-0 libatk-bridge2.0-0 \
+            libcups2 libdrm2 libxkbcommon0 libxcomposite1 libxdamage1 \
+            libxfixes3 libxrandr2 libgbm1 libasound2
+      - run: xvfb-run --auto-servernum npm run test-electron
+
+  cve:
+    name: 7 · CVE / SCA
+    needs: commit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      # npm audit + OSV (Go, go.sum'daki dolaylı bağımlılıklar dahil).
+      - run: npm run kapi:cve
+
+  yuk:
+    name: 8 · Yük (engelleyici motoru)
+    needs: birim
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npm run kapi:yuk
+
+  derleme:
+    name: 9 · Derleme (Windows kurulum paketi)
+    needs: [race, butunlesme, cve, yuk]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npx electron-builder --win nsis --publish never
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: |
+            dagitim/*.exe
+            dagitim/*.blockmap
+            dagitim/latest.yml
+          if-no-files-found: error
+
+  duman:
+    name: 10 · Duman (canlı besleme)
+    needs: [race, butunlesme, cve, yuk]
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      # Yayındaki manifest, imza ve paket birbirini tutuyor mu.
+      - run: npm run kapi:duman

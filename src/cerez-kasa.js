@@ -48,7 +48,6 @@ const BICIM_PAROLA = 2;   // DPAPI + ana parola (AES-256-GCM)
  * çok daha kolay yanlış yapılır.
  */
 const KDF = { ad: 'scrypt', N: 1 << 17, r: 8, p: 1, uzunluk: 32 };   // ~280 ms (ölçüldü)
-const TUZ_BAYT = 16;
 const IV_BAYT = 12;   // GCM için standart
 
 function kasaYolu(veriDizini) {

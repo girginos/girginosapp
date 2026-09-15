@@ -108,9 +108,27 @@ function kapat(cocuk) {
     bak('sayfa tüm pencereyi kapladı (büyüdü)', sonra > once, true);
 
     await cdp(ws, 'document.exitFullscreen().then(()=>"ok").catch(()=>"h")', true).catch(() => {});
-    await bekle(1200);
-    bak('çıkışta tam ekran öğesi kalktı', await cdp(ws, '!!document.fullscreenElement').catch(() => null), false);
-    bak('çıkışta viewport normale döndü', await cdp(ws, 'window.innerHeight').catch(() => 0), once);
+    /*
+     * SABİT BEKLEME DEĞİL, KOŞUL BEKLEME. Tam ekrandan çıkış pencere
+     * yöneticisine gidiyor; yüklü makinede 1200 ms yetmiyordu ve test
+     * kırılgandı (boru hattında Electron testleri arka arkaya koşarken
+     * kırmızıya döndü, tek başına koşunca geçti - ölçüldü). İddia AYNI;
+     * yalnızca duruma ulaşması için süre tanınıyor, süre dolarsa yine kırmızı.
+     */
+    const kosulBekle = async (ifade, beklenen, sureMs = 8000) => {
+      const bitis = Date.now() + sureMs;
+      let son;
+      do {
+        son = await cdp(ws, ifade).catch(() => null);
+        if (son === beklenen) return son;
+        await bekle(150);
+      } while (Date.now() < bitis);
+      return son;
+    };
+    bak('çıkışta tam ekran öğesi kalktı',
+      await kosulBekle('!!document.fullscreenElement', false), false);
+    bak('çıkışta viewport normale döndü',
+      await kosulBekle('window.innerHeight', once), once);
   }
 
   await kapat(cocuk);
