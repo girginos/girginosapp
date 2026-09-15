@@ -125,22 +125,30 @@ jobs:
       # sandbox:true üzerine kurulu; kum havuzu kapalı koşan bir E2E takımı
       # yeşil yanar ama kullanıcının hiç çalıştırmadığı bir yapılandırmayı
       # ölçer. Kapıyı zayıflatmak yerine ortamı düzeltiyoruz.
-      - name: kum havuzu izinleri
+      - name: Electron ikilisi + kum havuzu izinleri
         run: |
           set +e
+          echo "paket içeriği: $(ls node_modules/electron 2>&1 | tr '\n' ' ')"
           yol=node_modules/electron/dist/chrome-sandbox
+          # npm ci bazen Electron'un indirme betiğini tamamlamıyor ve dist hiç
+          # oluşmuyor (ölçüldü: bir koşuda vardı, sonrakinde yoktu). Sessizce
+          # kırmızıya dönmektense indirmeyi burada tamamlıyoruz.
           if [ ! -f "$yol" ]; then
-            echo "::error title=kum havuzu::$yol yok. dist: $(ls node_modules/electron/dist 2>&1 | tr '\n' ' ' | cut -c1-600)"
+            echo "dist yok; electron indirme betiği yeniden çalıştırılıyor"
+            node node_modules/electron/install.js
+            echo "indirme sonrası: $(ls node_modules/electron/dist 2>&1 | head -6 | tr '\n' ' ')"
+          fi
+          if [ ! -f "$yol" ]; then
+            echo "::error title=kum havuzu::$yol hâlâ yok. paket: $(ls node_modules/electron 2>&1 | tr '\n' ' ' | cut -c1-400)"
             exit 1
           fi
-          echo "önce: $(ls -l "$yol")"
           if ! sudo chown root:root "$yol"; then
             echo "::error title=kum havuzu::chown başarısız"; exit 1
           fi
           if ! sudo chmod 4755 "$yol"; then
             echo "::error title=kum havuzu::chmod başarısız"; exit 1
           fi
-          echo "sonra: $(ls -l "$yol")"
+          ls -l "$yol"
       # Ortam tanısı: kırmızıda neyin eksik olduğu günlüğe bakmadan anlaşılsın.
       - name: ortam
         run: |
