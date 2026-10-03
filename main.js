@@ -1966,6 +1966,7 @@ async function oturumKur() {
     ayarOku: () => ({
       otomatikKontrol: store.ayarlar.guncellemeKontrol,
       otomatikIndir: store.ayarlar.guncellemeIndir,
+      otomatikKur: store.ayarlar.guncellemeOtomatikKur,
       kanal: store.ayarlar.guncellemeKanali
     })
   });
@@ -2269,6 +2270,7 @@ const AYAR_DOGRULAMA = {
   otomatikGuncelle: (v) => typeof v === 'boolean',
   guncellemeKontrol: (v) => typeof v === 'boolean',
   guncellemeIndir: (v) => typeof v === 'boolean',
+  guncellemeOtomatikKur: (v) => typeof v === 'boolean',
   guncellemeKanali: (v) => v === 'kararli' || v === 'beta'
 };
 
@@ -2734,6 +2736,9 @@ function ipcKur() {
     // Scriptlet demeti engelleyici durumuna ve listeye bağlı; ikisi de tazelenmeli.
     if (p.anahtar === 'filtreListeleriAcik' || p.anahtar === 'engelleyiciAcik') antiAdblockKur();
     if (p.anahtar === 'uboMotorAcik') blocker.uboyuKur();
+    // Çıkışta otomatik kurulum tercihi: quit anındaki yeniden-denetim bu
+    // bayrağı okuduğu için canlı güncelliyoruz (yeni indirme beklemeden).
+    if (p.anahtar === 'guncellemeOtomatikKur' && guncelleme) guncelleme.otomatikKurGuncelle();
     if (p.anahtar === 'tema') temayiUygula();
     if (p.anahtar.startsWith('vekil')) vekiliUygula();
     /*

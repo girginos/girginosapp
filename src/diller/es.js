@@ -300,7 +300,9 @@ module.exports = {
     'ayar.guncellemeOtoKontrol': 'Buscar actualizaciones automáticamente',
     'ayar.guncellemeOtoKontrolAciklama': 'La información de versión firmada se comprueba al inicio y cada 6 horas.',
     'ayar.guncellemeOtoIndir': 'Descargar automáticamente',
-    'ayar.guncellemeOtoIndirAciklama': 'La nueva versión se descarga en segundo plano; la instalación sigue requiriendo tu confirmación.',
+    'ayar.guncellemeOtoIndirAciklama': 'La nueva versión se descarga en segundo plano.',
+    'ayar.guncellemeOtoKur': 'Instalar al salir',
+    'ayar.guncellemeOtoKurAciklama': 'Una actualización descargada se instala en silencio al cerrar el navegador o apagar el equipo (como Firefox). Si está desactivado, instálala con «Reiniciar e instalar».',
     'ayar.guncellemeKanal': 'Canal de actualización',
     'ayar.guncellemeKanalAciklama': 'El canal beta recibe novedades antes y está menos probado.',
     'ayar.kanalKararli': 'Estable',
@@ -313,6 +315,7 @@ module.exports = {
     'guncelleme.bulundu': 'La versión {surum} está disponible.',
     'guncelleme.iniyor': 'Descargando… {n} %',
     'guncelleme.hazir': 'La versión {surum} está lista para instalar.',
+    'guncelleme.hazirKapanista': 'Versión {surum} descargada; se instalará al cerrar el navegador.',
     'guncelleme.hata': 'No se pudo comprobar: {sebep}',
     'guncelleme.hataVekil': 'The proxy setting is blocking the connection. Check Settings > Proxy (if the address is empty, pick \x27Off\x27 or \x27System\x27).',
     /* --- yeni sekme ve hata sayfasi --- */

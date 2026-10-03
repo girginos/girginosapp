@@ -300,7 +300,9 @@ module.exports = {
     'ayar.guncellemeOtoKontrol': 'Проверять обновления автоматически',
     'ayar.guncellemeOtoKontrolAciklama': 'Подписанные сведения о выпуске проверяются при запуске и каждые 6 часов.',
     'ayar.guncellemeOtoIndir': 'Загружать автоматически',
-    'ayar.guncellemeOtoIndirAciklama': 'Новая версия загружается в фоне; установка по-прежнему требует вашего подтверждения.',
+    'ayar.guncellemeOtoIndirAciklama': 'Новая версия загружается в фоне.',
+    'ayar.guncellemeOtoKur': 'Устанавливать при выходе',
+    'ayar.guncellemeOtoKurAciklama': 'Загруженное обновление устанавливается незаметно при закрытии браузера или выключении компьютера (как в Firefox). Если выключено — установите вручную кнопкой «Перезапустить и установить».',
     'ayar.guncellemeKanal': 'Канал обновлений',
     'ayar.guncellemeKanalAciklama': 'Бета-канал получает новинки раньше и менее протестирован.',
     'ayar.kanalKararli': 'Стабильный',
@@ -313,6 +315,7 @@ module.exports = {
     'guncelleme.bulundu': 'Доступна версия {surum}.',
     'guncelleme.iniyor': 'Загрузка… {n} %',
     'guncelleme.hazir': 'Версия {surum} готова к установке.',
+    'guncelleme.hazirKapanista': 'Версия {surum} загружена; установится при закрытии браузера.',
     'guncelleme.hata': 'Не удалось проверить: {sebep}',
     'guncelleme.hataVekil': 'The proxy setting is blocking the connection. Check Settings > Proxy (if the address is empty, pick \x27Off\x27 or \x27System\x27).',
     /* --- yeni sekme ve hata sayfasi --- */

@@ -300,7 +300,9 @@ module.exports = {
     'ayar.guncellemeOtoKontrol': 'التحقق من التحديثات تلقائيًا',
     'ayar.guncellemeOtoKontrolAciklama': 'يُتحقَّق من معلومات الإصدار الموقّعة عند البدء وكل 6 ساعات.',
     'ayar.guncellemeOtoIndir': 'التنزيل تلقائيًا',
-    'ayar.guncellemeOtoIndirAciklama': 'يُنزَّل الإصدار الجديد في الخلفية؛ ويظل التثبيت بحاجة إلى موافقتك.',
+    'ayar.guncellemeOtoIndirAciklama': 'يُنزَّل الإصدار الجديد في الخلفية.',
+    'ayar.guncellemeOtoKur': 'التثبيت عند الإغلاق',
+    'ayar.guncellemeOtoKurAciklama': 'يُثبَّت التحديث الذي جرى تنزيله بصمت عند إغلاق المتصفح أو إيقاف تشغيل الحاسوب (مثل فايرفوكس). عند الإيقاف، ثبّته يدويًا عبر «إعادة التشغيل والتثبيت».',
     'ayar.guncellemeKanal': 'قناة التحديث',
     'ayar.guncellemeKanalAciklama': 'قناة بيتا تحصل على الجديد مبكرًا وهي أقل اختبارًا.',
     'ayar.kanalKararli': 'مستقرة',
@@ -313,6 +315,7 @@ module.exports = {
     'guncelleme.bulundu': 'الإصدار {surum} متاح.',
     'guncelleme.iniyor': 'جارٍ التنزيل… {n}٪',
     'guncelleme.hazir': 'الإصدار {surum} جاهز للتثبيت.',
+    'guncelleme.hazirKapanista': 'تم تنزيل الإصدار {surum}؛ سيُثبَّت عند إغلاق المتصفح.',
     'guncelleme.hata': 'تعذّر التحقق: {sebep}',
     'guncelleme.hataVekil': 'The proxy setting is blocking the connection. Check Settings > Proxy (if the address is empty, pick \x27Off\x27 or \x27System\x27).',
     /* --- yeni sekme ve hata sayfasi --- */

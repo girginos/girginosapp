@@ -61,6 +61,12 @@ const DEFAULTS = {
     // Uygulama güncellemesi
     guncellemeKontrol: true,
     guncellemeIndir: true,
+    // Firefox gibi: arka planda inen güncelleme, tarayıcı kapatılınca (ya da PC
+    // kapanınca) SESSİZCE kurulur; yeniden başlatma istemi çıkmaz. Varsayılan
+    // AÇIK. Kullanıcı yine de Ayarlar'dan "Yeniden başlat ve kur" ile anında
+    // kurabilir. Güvenlik kapısı değişmez: yalnız imzalı manifest + sha512
+    // doğrulamasından geçmiş paket kurulur (bkz. src/guncelleme.js).
+    guncellemeOtomatikKur: true,
     guncellemeKanali: 'kararli',
     // İndirilen filtre listeleri (EasyList vb.)
     filtreListeleriAcik: true,

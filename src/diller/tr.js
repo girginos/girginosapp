@@ -313,7 +313,9 @@ module.exports = {
     'ayar.guncellemeOtoKontrol': 'Güncellemeleri otomatik denetle',
     'ayar.guncellemeOtoKontrolAciklama': 'Açılışta ve 6 saatte bir imzalı sürüm bilgisi kontrol edilir.',
     'ayar.guncellemeOtoIndir': 'Otomatik indir',
-    'ayar.guncellemeOtoIndirAciklama': 'Yeni sürüm bulununca arka planda indirilir; kurulum yine sizin onayınızla yapılır.',
+    'ayar.guncellemeOtoIndirAciklama': 'Yeni sürüm bulununca arka planda indirilir.',
+    'ayar.guncellemeOtoKur': 'Kapatınca otomatik kur',
+    'ayar.guncellemeOtoKurAciklama': 'İnen güncelleme, tarayıcıyı kapatınca ya da bilgisayarı kapatınca sessizce kurulur (Firefox gibi). Kapalıyken "Yeniden başlat ve kur" ile elle kurabilirsiniz.',
     'ayar.guncellemeKanal': 'Güncelleme kanalı',
     'ayar.guncellemeKanalAciklama': 'Beta kanalı yeni özellikleri erken alır, daha az test edilmiştir.',
     'ayar.kanalKararli': 'Kararlı',
@@ -326,6 +328,7 @@ module.exports = {
     'guncelleme.bulundu': '{surum} sürümü yayınlandı.',
     'guncelleme.iniyor': 'İndiriliyor… %{n}',
     'guncelleme.hazir': '{surum} kuruluma hazır.',
+    'guncelleme.hazirKapanista': '{surum} indirildi; tarayıcıyı kapatınca kurulacak.',
     'guncelleme.hata': 'Denetlenemedi: {sebep}',
     'guncelleme.hataVekil': 'Vekil sunucu ayarı bağlantıyı engelliyor. Ayarlar > Vekil sunucu bölümünü kontrol edin (adres boşsa \x27Kapalı\x27 ya da \x27Sistem\x27 seçin).',
     /* --- yeni sekme ve hata sayfasi --- */

@@ -1717,7 +1717,11 @@ function ayarlarPaneli() {
   let gDurum;
   if (gu.durum === 'bulundu') gDurum = cev('guncelleme.bulundu', { surum: gu.bulunanSurum });
   else if (gu.durum === 'iniyor') gDurum = cev('guncelleme.iniyor', { n: gu.ilerleme });
-  else if (gu.durum === 'hazir') gDurum = cev('guncelleme.hazir', { surum: gu.bulunanSurum });
+  else if (gu.durum === 'hazir') gDurum = cev(
+    // Otomatik kurulum açıksa güncelleme kapanışta sessizce kurulacak; kullanıcı
+    // "hemen kur"a basmak zorunda olmadığını bilsin.
+    a.guncellemeOtomatikKur !== false ? 'guncelleme.hazirKapanista' : 'guncelleme.hazir',
+    { surum: gu.bulunanSurum });
   else if (gu.durum === 'hata') gDurum = gu.sebep === 'vekil'
     ? cev('guncelleme.hataVekil')
     : cev('guncelleme.hata', { sebep: gu.sebep || '?' });
@@ -1772,6 +1776,8 @@ function ayarlarPaneli() {
     anahtar(a.guncellemeKontrol !== false, (v) => window.pusula.ayarDegistir('guncellemeKontrol', v))));
   g.appendChild(ayarSatiri(cev('ayar.guncellemeOtoIndir'), cev('ayar.guncellemeOtoIndirAciklama'),
     anahtar(a.guncellemeIndir !== false, (v) => window.pusula.ayarDegistir('guncellemeIndir', v))));
+  g.appendChild(ayarSatiri(cev('ayar.guncellemeOtoKur'), cev('ayar.guncellemeOtoKurAciklama'),
+    anahtar(a.guncellemeOtomatikKur !== false, (v) => window.pusula.ayarDegistir('guncellemeOtomatikKur', v))));
 
   const kanal = document.createElement('select');
   for (const [deger, etiketAnahtari] of [['kararli', 'ayar.kanalKararli'], ['beta', 'ayar.kanalBeta']]) {

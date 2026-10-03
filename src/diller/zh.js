@@ -300,7 +300,9 @@ module.exports = {
     'ayar.guncellemeOtoKontrol': '自动检查更新',
     'ayar.guncellemeOtoKontrolAciklama': '启动时以及每 6 小时检查一次已签名的发布信息。',
     'ayar.guncellemeOtoIndir': '自动下载',
-    'ayar.guncellemeOtoIndirAciklama': '新版本会在后台下载；安装仍需您确认。',
+    'ayar.guncellemeOtoIndirAciklama': '新版本会在后台下载。',
+    'ayar.guncellemeOtoKur': '退出时安装',
+    'ayar.guncellemeOtoKurAciklama': '下载好的更新会在你关闭浏览器或关机时静默安装（与 Firefox 相同）。关闭此项时，可用“重启并安装”手动安装。',
     'ayar.guncellemeKanal': '更新通道',
     'ayar.guncellemeKanalAciklama': '测试版通道更早获得新功能，测试较少。',
     'ayar.kanalKararli': '稳定版',
@@ -313,6 +315,7 @@ module.exports = {
     'guncelleme.bulundu': '{surum} 版本已发布。',
     'guncelleme.iniyor': '正在下载… {n}%',
     'guncelleme.hazir': '{surum} 已准备好安装。',
+    'guncelleme.hazirKapanista': '已下载版本 {surum}；关闭浏览器时将自动安装。',
     'guncelleme.hata': '检查失败：{sebep}',
     'guncelleme.hataVekil': 'The proxy setting is blocking the connection. Check Settings > Proxy (if the address is empty, pick \x27Off\x27 or \x27System\x27).',
     /* --- yeni sekme ve hata sayfasi --- */

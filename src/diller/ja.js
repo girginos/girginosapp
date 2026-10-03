@@ -300,7 +300,9 @@ module.exports = {
     'ayar.guncellemeOtoKontrol': '更新を自動的に確認',
     'ayar.guncellemeOtoKontrolAciklama': '署名済みのリリース情報を起動時と 6 時間ごとに確認します。',
     'ayar.guncellemeOtoIndir': '自動的にダウンロード',
-    'ayar.guncellemeOtoIndirAciklama': '新しいバージョンはバックグラウンドでダウンロードされます。インストールには確認が必要です。',
+    'ayar.guncellemeOtoIndirAciklama': '新しいバージョンはバックグラウンドでダウンロードされます。',
+    'ayar.guncellemeOtoKur': '終了時にインストール',
+    'ayar.guncellemeOtoKurAciklama': 'ダウンロード済みの更新は、ブラウザーを閉じるかパソコンをシャットダウンするときに自動でインストールされます（Firefox と同じ）。オフの場合は「再起動してインストール」で手動インストールします。',
     'ayar.guncellemeKanal': '更新チャンネル',
     'ayar.guncellemeKanalAciklama': 'ベータチャンネルは新機能を早く受け取りますが、検証は少なめです。',
     'ayar.kanalKararli': '安定版',
@@ -313,6 +315,7 @@ module.exports = {
     'guncelleme.bulundu': 'バージョン {surum} が公開されました。',
     'guncelleme.iniyor': 'ダウンロード中… {n}%',
     'guncelleme.hazir': 'バージョン {surum} をインストールできます。',
+    'guncelleme.hazirKapanista': 'バージョン {surum} をダウンロードしました。ブラウザーを閉じるとインストールされます。',
     'guncelleme.hata': '確認できませんでした: {sebep}',
     'guncelleme.hataVekil': 'The proxy setting is blocking the connection. Check Settings > Proxy (if the address is empty, pick \x27Off\x27 or \x27System\x27).',
     /* --- yeni sekme ve hata sayfasi --- */

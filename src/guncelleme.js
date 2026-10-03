@@ -87,7 +87,24 @@ class GuncellemeYoneticisi {
   _updaterKur() {
     const u = this.autoUpdater;
     u.autoDownload = false;            // indirme kararını biz veriyoruz
-    u.autoInstallOnAppQuit = false;    // kurulum yalnızca kullanıcı isteyince
+    /*
+     * Çıkışta otomatik kurulum (Firefox tarzı). Açıkken paket arka planda
+     * iner, tarayıcı kapatılınca ya da PC kapanınca SESSİZCE kurulur.
+     *
+     * electron-updater'ın kendi kapısı: indirme bitince (executeDownload'ın
+     * 'done' kancası) addQuitHandler() çağrılır ve autoInstallOnAppQuit AÇIKSA
+     * app 'quit' olayına install(true, false) — sessiz, YENİDEN AÇMADAN —
+     * bağlanır (BaseUpdater.js'te ölçüldü). 'quit' olayı bizim before-quit
+     * (çerez kasası) + will-quit adımlarından SONRA gelir, yani kasa korunur.
+     *
+     * Güvenlik: installerPath yalnız downloadUpdate() ile dolar; biz de onu
+     * ancak imzalı manifest + sha512 ön-kapısı geçince çağırıyoruz. Yani
+     * çıkışta kurulan paket her zaman doğrulanmış pakettir.
+     *
+     * Değer kullanıcı ayarından; her indirme öncesi ve ayar değişince
+     * otomatikKurGuncelle() ile tazeleniyor.
+     */
+    u.autoInstallOnAppQuit = this.ayarOku().otomatikKur !== false;
     u.allowDowngrade = false;          // geri sürüm saldırısına kapalı
     u.allowPrerelease = false;
     if (anahtarlar.YAYINCI_ADI) {
@@ -240,8 +257,22 @@ class GuncellemeYoneticisi {
     return this.bilgi();
   }
 
+  /*
+   * Çıkışta otomatik kurulum bayrağını güncel ayara eşitler. İki yerde gerek:
+   * (1) indirme başlamadan ÖNCE — electron-updater addQuitHandler'ı indirme
+   * bitince bu bayrağa bakıp kapıyı ekliyor; (2) ayar değişince — quit anındaki
+   * yeniden-denetim de aynı bayrağı okuyor, yani kapatınca kurulum kullanıcının
+   * o anki tercihini yansıtsın.
+   */
+  otomatikKurGuncelle() {
+    if (this.autoUpdater) {
+      this.autoUpdater.autoInstallOnAppQuit = this.ayarOku().otomatikKur !== false;
+    }
+  }
+
   async indir() {
     if (this.durum !== DURUMLAR.BULUNDU) return this.bilgi();
+    this.otomatikKurGuncelle();   // kapı doğru tercihle eklensin
     this.ilerleme = 0;
     this._durumaGec(DURUMLAR.INIYOR);
     try {

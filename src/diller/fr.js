@@ -300,7 +300,9 @@ module.exports = {
     'ayar.guncellemeOtoKontrol': 'Rechercher automatiquement les mises à jour',
     'ayar.guncellemeOtoKontrolAciklama': 'Les informations de version signées sont vérifiées au démarrage et toutes les 6 heures.',
     'ayar.guncellemeOtoIndir': 'Télécharger automatiquement',
-    'ayar.guncellemeOtoIndirAciklama': 'La nouvelle version est téléchargée en arrière-plan ; l’installation demande toujours votre accord.',
+    'ayar.guncellemeOtoIndirAciklama': 'La nouvelle version est téléchargée en arrière-plan.',
+    'ayar.guncellemeOtoKur': 'Installer à la fermeture',
+    'ayar.guncellemeOtoKurAciklama': 'Une mise à jour téléchargée est installée en silence lorsque vous fermez le navigateur ou éteignez l’ordinateur (comme Firefox). Si désactivé, installez-la avec « Redémarrer et installer ».',
     'ayar.guncellemeKanal': 'Canal de mise à jour',
     'ayar.guncellemeKanalAciklama': 'Le canal bêta reçoit les nouveautés plus tôt et est moins testé.',
     'ayar.kanalKararli': 'Stable',
@@ -313,6 +315,7 @@ module.exports = {
     'guncelleme.bulundu': 'La version {surum} est disponible.',
     'guncelleme.iniyor': 'Téléchargement… {n} %',
     'guncelleme.hazir': 'La version {surum} est prête à installer.',
+    'guncelleme.hazirKapanista': 'Version {surum} téléchargée ; elle s’installera à la fermeture du navigateur.',
     'guncelleme.hata': 'Échec de la vérification : {sebep}',
     'guncelleme.hataVekil': 'The proxy setting is blocking the connection. Check Settings > Proxy (if the address is empty, pick \x27Off\x27 or \x27System\x27).',
     /* --- yeni sekme ve hata sayfasi --- */

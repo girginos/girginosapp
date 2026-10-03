@@ -210,6 +210,56 @@ for (const [a, b, beklenen] of surumTestleri) {
   esit('kurulumdan sonra yeniden açılır', cagrilar[0][1], true);
 }
 
+/* ---- çıkışta otomatik kurulum (Firefox tarzı) ---- */
+/*
+ * autoInstallOnAppQuit, electron-updater'ın "indirme bitince app quit'inde
+ * sessizce kur" kapısı. Biz bunu kullanıcı ayarından sürüyoruz. Kapının
+ * doğru değerle eklenmesi için indirme BAŞLAMADAN ÖNCE ayarlanması şart
+ * (addQuitHandler indirme 'done' kancasında bu bayrağa bakar); birisi bu
+ * sırayı bozarsa burası düşer.
+ */
+{
+  const { GuncellemeYoneticisi } = require('../src/guncelleme');
+  let ayar = { otomatikKur: true };
+  const y = new GuncellemeYoneticisi({
+    app: { getVersion: () => '0.2.0', isPackaged: true, getLocale: () => 'tr' },
+    oturum: {},
+    degisti: () => {},
+    ayarOku: () => ayar
+  });
+  const sahte = { autoInstallOnAppQuit: null, downloadUpdate: async () => {} };
+  y.autoUpdater = sahte;
+
+  ayar = { otomatikKur: true };
+  y.otomatikKurGuncelle();
+  esit('otomatikKur açıkken quit-kurulumu açılır', sahte.autoInstallOnAppQuit, true);
+
+  ayar = { otomatikKur: false };
+  y.otomatikKurGuncelle();
+  esit('otomatikKur kapalıyken quit-kurulumu kapanır', sahte.autoInstallOnAppQuit, false);
+
+  ayar = {};   // tanımsız = varsayılan açık (kullanıcı ayarı henüz yoksa)
+  y.otomatikKurGuncelle();
+  esit('otomatikKur tanımsızsa varsayılan açık', sahte.autoInstallOnAppQuit, true);
+
+  // indir(): bayrağı downloadUpdate'ten ÖNCE (senkron) ayarlamalı.
+  ayar = { otomatikKur: true };
+  sahte.autoInstallOnAppQuit = null;
+  y.durum = 'bulundu';
+  const p = y.indir();   // senkron kısmı hemen çalışır; await gerekmiyor
+  esit('indir() çıkış-kurulumunu indirmeden önce ayarlar', sahte.autoInstallOnAppQuit, true);
+  esit('indir() durumu iniyora çeker', y.durum, 'iniyor');
+  p.catch(() => {});
+
+  // Kapalıyken indir() bayrağı kapalı tutmalı.
+  ayar = { otomatikKur: false };
+  sahte.autoInstallOnAppQuit = null;
+  y.durum = 'bulundu';
+  const p2 = y.indir();
+  esit('otomatikKur kapalıyken indir() quit-kurulumu açmaz', sahte.autoInstallOnAppQuit, false);
+  p2.catch(() => {});
+}
+
 if (hatalar.length) {
   console.error('\nBAŞARISIZ (' + hatalar.length + '):\n');
   for (const h of hatalar) console.error('  ✗ ' + h + '\n');
