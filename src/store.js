@@ -236,6 +236,21 @@ class Store {
   }
 
   /*
+   * Değişmez: "geçmişi kaydetme" kapalıyken saklanan geçmiş BOŞ tutulur.
+   * gecmiseEkle() yalnızca yeni eklemeyi durduruyor; ayar kapatılmadan önce
+   * birikmiş kayıtlar diskte kalıp açılışta geri geliyordu. Bu yüzden hem
+   * açılışta hem ayar kapatılınca çağrılır; kuralı tek yerde tutar.
+   * Döner: temizleme yapıldıysa true.
+   */
+  gecmisPolitikasiniUygula() {
+    if (!this.veri.ayarlar.gecmisiKaydet && this.veri.gecmis.length) {
+      this.gecmisiTemizle();
+      return true;
+    }
+    return false;
+  }
+
+  /*
    * Yer imi listesi her değiştiğinde artan sürüm. durum yayını yer imlerini
    * (favicon'larıyla ~6 KB) yalnızca bu sürüm değişince gönderiyor; sayfa
    * geçişi/yükleme gibi olaylarda boşuna tekrar tekrar yollamıyor.

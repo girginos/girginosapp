@@ -2736,6 +2736,10 @@ function ipcKur() {
     // Scriptlet demeti engelleyici durumuna ve listeye bağlı; ikisi de tazelenmeli.
     if (p.anahtar === 'filtreListeleriAcik' || p.anahtar === 'engelleyiciAcik') antiAdblockKur();
     if (p.anahtar === 'uboMotorAcik') blocker.uboyuKur();
+    // "Geçmişi kaydetme" kapatılınca birikmiş geçmişi HEMEN sil: kullanıcı
+    // yeniden başlatmadan da geçmişinin (ve adres önerilerinin) gittiğini
+    // görsün. Açılıştaki değişmez uygulamasıyla aynı kural (tek metot).
+    if (p.anahtar === 'gecmisiKaydet') store.gecmisPolitikasiniUygula();
     // Çıkışta otomatik kurulum tercihi: quit anındaki yeniden-denetim bu
     // bayrağı okuduğu için canlı güncelliyoruz (yeni indirme beklemeden).
     if (p.anahtar === 'guncellemeOtomatikKur' && guncelleme) guncelleme.otomatikKurGuncelle();
@@ -2897,6 +2901,14 @@ if (!app.requestSingleInstanceLock()) {
 
   app.whenReady().then(async () => {
     store = new Store(path.join(app.getPath('userData'), 'pusula-veri.json'));
+    /*
+     * "Geçmişi kaydetme" kapalıyken geçmiş HİÇ saklanmamalı. Ayarı kapatmak
+     * yalnızca yeni eklemeyi durduruyordu (store.gecmiseEkle); kapatmadan önce
+     * birikmiş kayıtlar diskte kalıyor ve açılışta hem geçmiş sayfasında hem
+     * adres çubuğu önerilerinde tekrar görünüyordu (ölçüldü: ayar kapalı,
+     * gecmis=10). Açılışta değişmezi uygula: kapalıysa birikmiş ne varsa sil.
+     */
+    store.gecmisPolitikasiniUygula();
     diliUygula();
     // Pencere olusmadan once: arka plan rengi ve baslik cubugu dogru temayla acilsin.
     temayiUygula();

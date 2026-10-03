@@ -285,6 +285,35 @@ esit('her kayıt geçerli alan adı biçiminde', LISTE.filter(d => !ALAN_BICIMI.
   try { require('node:fs').unlinkSync(yol); } catch { /* olsun */ }
 }
 
+/* ---- "geçmişi kaydetme" kapalıyken geçmiş boş tutuluyor mu? ---- */
+{
+  const { Store } = require('../src/store');
+  const os = require('node:os');
+  const fs = require('node:fs');
+  const yol = require('node:path').join(os.tmpdir(), 'gecmis-politika-' + process.pid + '.json');
+
+  // Kullanıcının gerçek senaryosu: ayar KAPALI ama diskte birikmiş 10 kayıt.
+  fs.writeFileSync(yol, JSON.stringify({
+    ayarlar: { gecmisiKaydet: false },
+    gecmis: Array.from({ length: 10 }, (_, i) => ({ url: 'https://x' + i + '.test', baslik: 'X', zaman: i }))
+  }));
+  const d = new Store(yol);
+  esit('açılışta kapalıysa birikmiş geçmiş görülür (önce)', d.veri.gecmis.length, 10);
+  esit('politika kapalıyken temizler', d.gecmisPolitikasiniUygula(), true);
+  esit('geçmiş boşaldı', d.veri.gecmis.length, 0);
+  // Kapalıyken yeni ekleme de yapılmamalı (mevcut davranış, regresyon kalkanı).
+  d.gecmiseEkle('https://yeni.test', 'Y');
+  esit('kapalıyken yeni kayıt eklenmez', d.veri.gecmis.length, 0);
+
+  // Açıkken dokunmamalı.
+  d.ayarla('gecmisiKaydet', true);
+  d.gecmiseEkle('https://a.test', 'A');
+  esit('açıkken politika temizlemez', d.gecmisPolitikasiniUygula(), false);
+  esit('açıkken kayıt durur', d.veri.gecmis.length, 1);
+
+  try { fs.unlinkSync(yol); } catch { /* olsun */ }
+}
+
 /* ---- sık gidilenler: gerçekten en çok ziyaret edilenler mi? ---- */
 {
   const { Store } = require('../src/store');
